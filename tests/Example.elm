@@ -95,6 +95,17 @@ listDecoder =
                             , error = TypeMisMatch ExpectedInt
                             }
                         )
+        , test "multiple errors accumulate" <|
+            \_ ->
+                """ [ "foo", 2, "bar" ] """
+                    |> Decode.decodeString (Decode.list Decode.int)
+                    |> Expect.error
+                        (Error <|
+                            Multiple
+                                [ InContext { path = [ Index 0 ], error = TypeMisMatch ExpectedInt }
+                                , InContext { path = [ Index 2 ], error = TypeMisMatch ExpectedInt }
+                                ]
+                        )
         ]
 
 
@@ -147,7 +158,7 @@ oneOfDecoder =
             \_ ->
                 """ [] """
                     |> Decode.decodeString (Decode.oneOf [])
-                    |> Expect.error (Error (BadOneOf []))
+                    |> Expect.error (Error (Multiple []))
         , test "first success wins" <|
             \_ ->
                 """ [] """
@@ -179,7 +190,7 @@ oneOfDecoder =
                         )
                     |> Expect.error
                         (Error
-                            (BadOneOf
+                            (Multiple
                                 [ Error (Custom "first")
                                 , Error (Custom "second")
                                 ]

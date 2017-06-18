@@ -113,7 +113,7 @@ type Error
 type ErrorType
     = Structural StructuralIssue
     | TypeMisMatch MisMatch
-    | BadOneOf (List Error)
+    | Multiple (List Error)
     | BadMap Error Error
     | Custom String
 
@@ -276,20 +276,48 @@ andThen toDecoder decoder val =
     decoder val |> Result.andThen (\output -> toDecoder output val)
 
 
+combineResults : Result (List err) (List a) -> Result err a -> Result (List err) (List a)
+combineResults acc val =
+    case ( acc, val ) of
+        ( Err xs, Err x ) ->
+            Err (x :: xs)
+
+        ( Err xs, _ ) ->
+            acc
+
+        ( Ok _, Err x ) ->
+            Err [ x ]
+
+        ( Ok xs, Ok x ) ->
+            Ok (x :: xs)
+
+
+toError : List Error -> Error
+toError errors =
+    case errors of
+        [ error ] ->
+            error
+
+        _ ->
+            errors |> Multiple |> Error
+
+
 {-| Decodes a JSON object into a list of key-value pairs.
 -}
 keyValuePairs : Decoder a -> Decoder (List ( String, a ))
 keyValuePairs decoder input =
     case JD.decodeValue (JD.keyValuePairs JD.value) input of
         Ok kvs ->
-            List.foldl
-                (\( key, val ) vals ->
+            List.foldr
+                (\( key, val ) acc ->
                     decoder val
                         |> inPath (Field key)
-                        |> Result.map2 (\xs x -> ( key, x ) :: xs) vals
+                        |> Result.map ((,) key)
+                        |> combineResults acc
                 )
                 (Ok [])
-                kvs
+                (List.reverse kvs)
+                |> Result.mapError toError
 
         Err _ ->
             ExpectedObject |> Structural |> Error |> Err
@@ -301,17 +329,17 @@ list : Decoder a -> Decoder (List a)
 list decoder input =
     case JD.decodeValue (JD.list JD.value) input of
         Ok vals ->
-            List.foldl
-                (\val ( r, idx ) ->
+            List.foldr
+                (\val ( acc, idx ) ->
                     decoder val
                         |> inPath (Index idx)
-                        |> Result.map2 (flip (::)) r
-                        |> flip (,) (idx + 1)
+                        |> combineResults acc
+                        |> flip (,) (idx - 1)
                 )
-                ( Ok [], 0 )
+                ( Ok [], List.length vals - 1 )
                 vals
                 |> Tuple.first
-                |> Result.map List.reverse
+                |> Result.mapError toError
 
         Err _ ->
             ExpectedArray |> Structural |> Error |> Err
@@ -360,7 +388,7 @@ oneOf decoders input =
                     result
     in
     List.foldl tryDecoder (Err []) decoders
-        |> Result.mapError (List.reverse >> BadOneOf >> Error)
+        |> Result.mapError (List.reverse >> Multiple >> Error)
 
 
 {-| A decoder that always succeeds.
