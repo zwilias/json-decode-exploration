@@ -8,6 +8,7 @@ module Json.Decode.Exploration
         , Path
         , StructuralIssue(..)
         , Value
+        , andMap
         , andThen
         , array
         , at
@@ -79,7 +80,7 @@ module Json.Decode.Exploration
 
 # Mapping
 
-@docs map, map2, map3, map4, map5
+@docs andMap, map, map2, map3, map4, map5
 
 
 # Fancy Decoding
@@ -113,6 +114,7 @@ type ErrorType
     = Structural StructuralIssue
     | TypeMisMatch MisMatch
     | BadOneOf (List Error)
+    | BadMap Error Error
     | Custom String
 
 
@@ -433,19 +435,28 @@ maybe decoder =
 -}
 map2 : (a -> b -> c) -> Decoder a -> Decoder b -> Decoder c
 map2 f aDecoder bDecoder input =
-    Result.map2 f
-        (aDecoder input)
-        (bDecoder input)
+    case ( aDecoder input, bDecoder input ) of
+        ( Ok a, Ok b ) ->
+            Ok <| f a b
+
+        ( Err a, Err b ) ->
+            Err <| Error <| BadMap b a
+
+        ( Err a, _ ) ->
+            Err a
+
+        ( _, Err b ) ->
+            Err b
 
 
 {-| Execute a function on the result of 3 decoders.
 -}
 map3 : (a -> b -> c -> d) -> Decoder a -> Decoder b -> Decoder c -> Decoder d
-map3 f aDecoder bDecoder cDecoder input =
-    Result.map3 f
-        (aDecoder input)
-        (bDecoder input)
-        (cDecoder input)
+map3 f aDecoder bDecoder cDecoder =
+    succeed f
+        |> andMap aDecoder
+        |> andMap bDecoder
+        |> andMap cDecoder
 
 
 {-| Execute a function on the result of 4 decoders.
@@ -457,12 +468,12 @@ map4 :
     -> Decoder c
     -> Decoder d
     -> Decoder e
-map4 f aDecoder bDecoder cDecoder dDecoder input =
-    Result.map4 f
-        (aDecoder input)
-        (bDecoder input)
-        (cDecoder input)
-        (dDecoder input)
+map4 f aDecoder bDecoder cDecoder dDecoder =
+    succeed f
+        |> andMap aDecoder
+        |> andMap bDecoder
+        |> andMap cDecoder
+        |> andMap dDecoder
 
 
 {-| Execute a function on the result of 5 decoders.
@@ -475,13 +486,20 @@ map5 :
     -> Decoder d
     -> Decoder e
     -> Decoder f
-map5 f aDecoder bDecoder cDecoder dDecoder eDecoder input =
-    Result.map5 f
-        (aDecoder input)
-        (bDecoder input)
-        (cDecoder input)
-        (dDecoder input)
-        (eDecoder input)
+map5 f aDecoder bDecoder cDecoder dDecoder eDecoder =
+    succeed f
+        |> andMap aDecoder
+        |> andMap bDecoder
+        |> andMap cDecoder
+        |> andMap dDecoder
+        |> andMap eDecoder
+
+
+{-| Allows pipelining decoders rather than having large `mapN` calls.
+-}
+andMap : Decoder a -> Decoder (a -> b) -> Decoder b
+andMap =
+    map2 (|>)
 
 
 {-| Creates a lazy decoder, useful for recursive structures.

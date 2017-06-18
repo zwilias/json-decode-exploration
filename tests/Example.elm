@@ -7,7 +7,7 @@ import Json.Decode.Exploration as Decode
         ( Decoder
         , Error(..)
         , ErrorType(..)
-        , ExpectedType(..)
+        , MisMatch(..)
         , Node(..)
         , StructuralIssue(..)
         )
@@ -209,3 +209,35 @@ lazyDecoder =
                 |> Decode.decodeString decoder
                 |> Expect.ok
                     (Branch [ Branch [ Val "foo", Val "bar" ], Val "foo" ])
+
+
+type alias TripRecord =
+    { foo : String, bar : String, baz : String }
+
+
+map3Decoder : Test
+map3Decoder =
+    let
+        decoder : Decoder TripRecord
+        decoder =
+            Decode.map3 TripRecord
+                (Decode.field "foo" Decode.string)
+                (Decode.field "bar" Decode.string)
+                (Decode.field "baz" Decode.string)
+    in
+    test "map3 retains all the errors" <|
+        \_ ->
+            """ {} """
+                |> Decode.decodeString decoder
+                |> Expect.error
+                    (Error
+                        (BadMap
+                            (Error
+                                (BadMap
+                                    (Error (Structural (ExpectedField "foo")))
+                                    (Error (Structural (ExpectedField "bar")))
+                                )
+                            )
+                            (Error (Structural (ExpectedField "baz")))
+                        )
+                    )
