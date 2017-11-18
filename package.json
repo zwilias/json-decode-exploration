@@ -1,0 +1,10 @@
+{
+    "scripts": {
+        "test": "elm-format --validate src && elm-verify-examples && elm-test"
+    },
+    "dependencies": {
+        "elm-format": "^0.7.0-exp",
+        "elm-test": "^0.18.9",
+        "elm-verify-examples": "^1.0.2"
+    }
+}
