@@ -1,10 +1,14 @@
 {
-    "version": "3.0.0",
+    "version": "4.0.0",
     "summary": "Exploration: JSON decoding with strong error types",
     "repository": "https://github.com/zwilias/json-decode-exploration.git",
     "license": "BSD3",
-    "source-directories": ["src"],
-    "exposed-modules": ["Json.Decode.Exploration"],
+    "source-directories": [
+        "src"
+    ],
+    "exposed-modules": [
+        "Json.Decode.Exploration"
+    ],
     "dependencies": {
         "elm-lang/core": "5.1.1 <= v < 6.0.0",
         "mgold/elm-nonempty-list": "3.1.0 <= v < 4.0.0"
