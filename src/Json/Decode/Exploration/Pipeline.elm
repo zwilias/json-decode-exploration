@@ -27,15 +27,25 @@ Use the `(|>)` operator to build JSON decoders.
 
 @docs decode, resolve
 
+
+### Verified docs
+
+The examples all expect imports set up like this:
+
+    import Json.Decode.Exploration exposing (..)
+    import Json.Decode.Exploration.Pipeline exposing (..)
+
+For automated verification of these examples, this import is also required.
+Please ignore it.
+
+    import DocVerificationHelpers exposing (User)
+
 -}
 
 import Json.Decode.Exploration as Decode exposing (Decoder)
 
 
 {-| Decode a required field.
-
-    import Decode.Pipeline exposing (decode, required)
-    import Json.Decode exposing (Decoder, int, string)
 
     type alias User =
         { id : Int
@@ -50,16 +60,9 @@ import Json.Decode.Exploration as Decode exposing (Decoder)
             |> required "name" string
             |> required "email" string
 
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {"id": 123, "email": "sam@example.com", "name": "Sam"}
-        """
-
-
-    -- Ok { id = 123, name = "Sam", email = "sam@example.com" }
+    """ {"id": 123, "email": "sam@example.com", "name": "Sam"} """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
 
 -}
 required : String -> Decoder a -> Decoder (a -> b) -> Decoder b
@@ -80,9 +83,6 @@ then `valDecoder` is used to decode its value. If `valDecoder` fails on a
 `null` value, then the `fallback` is used as if the field were missing
 entirely.
 
-    import Decode.Pipeline exposing (decode, optional, required)
-    import Json.Decode exposing (Decoder, int, null, oneOf, string)
-
     type alias User =
         { id : Int
         , name : String
@@ -96,16 +96,9 @@ entirely.
             |> optional "name" string "blah"
             |> required "email" string
 
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {"id": 123, "email": "sam@example.com" }
-        """
-
-
-    -- Ok { id = 123, name = "blah", email = "sam@example.com" }
+    """ { "id": 123, "email": "sam@example.com" } """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "blah", email = "sam@example.com" }
 
 Because `valDecoder` is given an opportunity to decode `null` values before
 resorting to the `fallback`, you can distinguish between missing and `null`
@@ -143,32 +136,22 @@ optionalDecoder path valDecoder fallback =
 {-| Rather than decoding anything, use a fixed value for the next step in the
 pipeline. `harcoded` does not look at the JSON at all.
 
-    import Decode.Pipeline exposing (decode, required)
-    import Json.Decode exposing (Decoder, int, string)
-
     type alias User =
         { id : Int
+        , name : String
         , email : String
-        , followers : Int
         }
 
     userDecoder : Decoder User
     userDecoder =
         decode User
             |> required "id" int
+            |> hardcoded "Alex"
             |> required "email" string
-            |> hardcoded 0
 
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {"id": 123, "email": "sam@example.com"}
-        """
-
-
-    -- Ok { id = 123, email = "sam@example.com", followers = 0 }
+    """ { "id": 123, "email": "sam@example.com" } """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Alex", email = "sam@example.com" }
 
 -}
 hardcoded : a -> Decoder (a -> b) -> Decoder b
@@ -179,9 +162,6 @@ hardcoded =
 {-| Run the given decoder and feed its result into the pipeline at this point.
 
 Consider this example.
-
-    import Decode.Pipeline exposing (custom, decode, required)
-    import Json.Decode exposing (Decoder, at, int, string)
 
     type alias User =
         { id : Int
@@ -196,20 +176,15 @@ Consider this example.
             |> custom (at [ "profile", "name" ] string)
             |> required "email" string
 
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {
-            "id": 123,
-            "email": "sam@example.com",
-            "profile": {"name": "Sam"}
-          }
-        """
-
-
-    -- Ok { id = 123, name = "Sam", email = "sam@example.com" }
+    """
+    {
+        "id": 123,
+        "email": "sam@example.com",
+        "profile": {"name": "Sam"}
+    }
+    """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
 
 -}
 custom : Decoder a -> Decoder (a -> b) -> Decoder b
@@ -220,11 +195,9 @@ custom =
 {-| Convert a `Decoder (Result x a)` into a `Decoder a`. Useful when you want
 to perform some custom processing just before completing the decoding operation.
 
-    import Decode.Pipeline exposing (decode, required, resolve)
-    import Json.Decode exposing (Decoder, float, int, string)
-
     type alias User =
         { id : Int
+        , name : String
         , email : String
         }
 
@@ -233,33 +206,32 @@ to perform some custom processing just before completing the decoding operation.
         let
             -- toDecoder gets run *after* all the
             -- (|> required ...) steps are done.
-            toDecoder : Int -> String -> Int -> Decoder User
-            toDecoder id email version =
-                if version > 2 then
-                    succeed (User id email)
+            toDecoder : Int -> String -> String -> Int -> Decoder User
+            toDecoder id name email version =
+                if version >= 2 then
+                    succeed (User id name email)
                 else
                     fail "This JSON is from a deprecated source. Please upgrade!"
         in
         decode toDecoder
             |> required "id" int
+            |> required "name" string
             |> required "email" string
             |> required "version" int
             -- version is part of toDecoder,
+            -- but it is not a part of User
             |> resolve
 
-
-    -- but it is not a part of User
-
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {"id": 123, "email": "sam@example.com", "version": 1}
-        """
-
-
-    -- Err "This JSON is from a deprecated source. Please upgrade!"
+    """
+    {
+        "id": 123,
+        "name": "Sam",
+        "email": "sam@example.com",
+        "version": 3
+    }
+    """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
 
 -}
 resolve : Decoder (Decoder a) -> Decoder a
@@ -269,9 +241,6 @@ resolve =
 
 {-| Begin a decoding pipeline. This is a synonym for [Json.Decode.succeed](http://package.elm-lang.org/packages/elm-lang/core/latest/Json-Decode#succeed),
 intended to make things read more clearly.
-
-    import Json.Decode exposing (Decoder, float, int, string)
-    import Json.Decode.Pipeline exposing (decode, optional, required)
 
     type alias User =
         { id : Int

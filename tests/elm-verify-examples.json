@@ -1,4 +1,4 @@
 {
     "root": "../src",
-    "tests": ["Json.Decode.Exploration"]
+    "tests": ["Json.Decode.Exploration", "Json.Decode.Exploration.Pipeline"]
 }
