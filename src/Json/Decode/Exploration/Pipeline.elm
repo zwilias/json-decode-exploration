@@ -120,21 +120,21 @@ values if you need to:
 -}
 optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optional key valDecoder fallback decoder =
-    custom (optionalDecoder (Decode.field key) valDecoder fallback) decoder
+    custom (optionalDecoder [ key ] valDecoder fallback) decoder
 
 
 {-| Decode an optional nested field.
 -}
 optionalAt : List String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optionalAt path valDecoder fallback decoder =
-    custom (optionalDecoder (Decode.at path) valDecoder fallback) decoder
+    custom (optionalDecoder path valDecoder fallback) decoder
 
 
-optionalDecoder : (Decoder (Decoder a) -> Decoder (Decoder a)) -> Decoder a -> a -> Decoder a
-optionalDecoder pathDecoder valDecoder fallback =
+optionalDecoder : List String -> Decoder a -> a -> Decoder a
+optionalDecoder path valDecoder fallback =
     Decode.oneOf
-        [ pathDecoder (Decode.null <| Decode.succeed fallback)
-        , pathDecoder (Decode.succeed valDecoder)
+        [ Decode.at path (Decode.null <| Decode.succeed fallback)
+        , Decode.at path (Decode.succeed <| Decode.at path valDecoder)
         , Decode.succeed (Decode.succeed fallback)
         ]
         |> resolve
