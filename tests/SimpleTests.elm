@@ -109,3 +109,147 @@ simpleRecursiveTest =
                             ]
                         )
                     )
+
+
+
+-- mapX functions
+
+
+map2Test : Test
+map2Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map2
+                (\a b -> a + b)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+    in
+    test "map2" <|
+        \_ ->
+            """ [ 1, 2 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 3)
+
+
+map3Test : Test
+map3Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map3
+                (\a b c -> a + b + c)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+                (Decode.index 2 Decode.int)
+    in
+    test "map3" <|
+        \_ ->
+            """ [ 1, 2, 3 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 6)
+
+
+map4Test : Test
+map4Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map4
+                (\a b c d -> a + b + c + d)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+                (Decode.index 2 Decode.int)
+                (Decode.index 3 Decode.int)
+    in
+    test "map4" <|
+        \_ ->
+            """ [ 1, 2, 3, 4 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 10)
+
+
+map5Test : Test
+map5Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map5
+                (\a b c d e -> a + b + c + d + e)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+                (Decode.index 2 Decode.int)
+                (Decode.index 3 Decode.int)
+                (Decode.index 4 Decode.int)
+    in
+    test "map5" <|
+        \_ ->
+            """ [ 1, 2, 3, 4, 5 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 15)
+
+
+map6Test : Test
+map6Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map6
+                (\a b c d e f -> a + b + c + d + e + f)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+                (Decode.index 2 Decode.int)
+                (Decode.index 3 Decode.int)
+                (Decode.index 4 Decode.int)
+                (Decode.index 5 Decode.int)
+    in
+    test "map6" <|
+        \_ ->
+            """ [ 1, 2, 3, 4, 5, 6 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 21)
+
+
+map7Test : Test
+map7Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map7
+                (\a b c d e f g -> a + b + c + d + e + f + g)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+                (Decode.index 2 Decode.int)
+                (Decode.index 3 Decode.int)
+                (Decode.index 4 Decode.int)
+                (Decode.index 5 Decode.int)
+                (Decode.index 6 Decode.int)
+    in
+    test "map7" <|
+        \_ ->
+            """ [ 1, 2, 3, 4, 5, 6, 7 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 28)
+
+
+map8Test : Test
+map8Test =
+    let
+        decoder : Decoder Int
+        decoder =
+            Decode.map8
+                (\a b c d e f g h -> a + b + c + d + e + f + g + h)
+                (Decode.index 0 Decode.int)
+                (Decode.index 1 Decode.int)
+                (Decode.index 2 Decode.int)
+                (Decode.index 3 Decode.int)
+                (Decode.index 4 Decode.int)
+                (Decode.index 5 Decode.int)
+                (Decode.index 6 Decode.int)
+                (Decode.index 7 Decode.int)
+    in
+    test "map8" <|
+        \_ ->
+            """ [ 1, 2, 3, 4, 5, 6, 7, 8 ] """
+                |> Decode.decodeString decoder
+                |> Expect.equal (Decode.Success 36)
