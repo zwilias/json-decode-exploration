@@ -46,6 +46,8 @@ Examples assume imports:
 
     import Json.Encode as Encode
     import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
+    import Array
+    import Dict
 
 
 # Primitives
@@ -463,6 +465,11 @@ list (Decoder decoderFn) =
 
 
 {-| _Convenience function._ Decode a JSON array into an Elm `Array`.
+
+    """ [ 1, 2, 3 ] """
+        |> decodeString (array int)
+    --> Success <| Array.fromList [ 1, 2, 3 ]
+
 -}
 array : Decoder a -> Decoder (Array a)
 array decoder =
@@ -470,6 +477,14 @@ array decoder =
 
 
 {-| _Convenience function._ Decode a JSON object into an Elm `Dict String`.
+
+    """ { "foo": "bar", "bar": "hi there" } """
+        |> decodeString (dict string)
+    --> Success <| Dict.fromList
+    -->   [ ( "bar", "hi there" )
+    -->   , ( "foo", "bar" )
+    -->   ]
+
 -}
 dict : Decoder v -> Decoder (Dict String v)
 dict decoder =

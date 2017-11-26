@@ -1,8 +1,7 @@
 module SimpleTests exposing (..)
 
 import Expect exposing (Expectation)
-import Json.Decode.Exploration as Decode exposing (..)
-import Json.Decode.Exploration.Pipeline exposing (..)
+import Json.Decode.Exploration as Decode exposing (Decoder)
 import Json.Encode as Encode
 import List.Nonempty exposing (Nonempty(..))
 import Test exposing (..)
@@ -25,15 +24,15 @@ unusedSimpleValues =
 unusedValueTest : Encode.Value -> Test
 unusedValueTest value =
     let
-        warnings : Nonempty Warning
+        warnings : Decode.Warnings
         warnings =
-            Nonempty (UnusedValue value) []
+            Nonempty (Decode.UnusedValue value) []
     in
     test (Encode.encode 0 value) <|
         \_ ->
             value
-                |> decodeValue (Decode.succeed ())
-                |> Expect.equal (WithWarnings warnings ())
+                |> Decode.decodeValue (Decode.succeed ())
+                |> Expect.equal (Decode.WithWarnings warnings ())
 
 
 simpleUnexpectedTypes : Test
@@ -41,7 +40,7 @@ simpleUnexpectedTypes =
     let
         neutralize : Decoder a -> Decoder ()
         neutralize =
-            map (always ())
+            Decode.map (always ())
     in
     [ ( Encode.string "foo", neutralize Decode.int, "Expected an integer number" )
     , ( Encode.string "foo", neutralize Decode.float, "Expected a number" )
@@ -60,31 +59,53 @@ simpleUnexpectedTypes =
 simpleUnexpectedType : Encode.Value -> Decoder () -> String -> Test
 simpleUnexpectedType value decoder expected =
     let
-        expectedErrors : Errors
+        expectedErrors : Decode.Errors
         expectedErrors =
             Nonempty
-                (Failure expected value)
+                (Decode.Failure expected value)
                 []
     in
     test expected <|
         \_ ->
             value
-                |> decodeValue decoder
-                |> Expect.equal (Errors expectedErrors)
+                |> Decode.decodeValue decoder
+                |> Expect.equal (Decode.Errors expectedErrors)
 
 
-optionalAtTest : Test
-optionalAtTest =
-    let
-        decoder : Decoder (Maybe (List Int))
-        decoder =
-            decode identity
-                |> optionalAt [ "a", "b", "c" ] (Decode.list Decode.int |> Decode.map Just) Nothing
-    in
-    describe "Json.Decode.Exploration.Pipeline"
-        [ test "should work with optionalAt" <|
-            \() ->
-                """ {"a": {"b": {"c": [1,2,3]}}} """
-                    |> decodeString decoder
-                    |> Expect.equal (Success <| Just [ 1, 2, 3 ])
+
+-- Simple recursive structure
+
+
+type Tree
+    = Leaf String
+    | Branch (List Tree)
+
+
+treeDecoder : Decoder Tree
+treeDecoder =
+    Decode.oneOf
+        [ Decode.map Leaf Decode.string
+        , Decode.map Branch (Decode.list <| Decode.lazy <| \_ -> treeDecoder)
         ]
+
+
+simpleRecursiveTest : Test
+simpleRecursiveTest =
+    test "simple recursion" <|
+        \_ ->
+            """
+            [ "1"
+            , [ "2", "3"]
+            , [ [ "4" ] ]
+            ]
+        """
+                |> Decode.decodeString treeDecoder
+                |> Expect.equal
+                    (Decode.Success
+                        (Branch
+                            [ Leaf "1"
+                            , Branch [ Leaf "2", Leaf "3" ]
+                            , Branch [ Branch [ Leaf "4" ] ]
+                            ]
+                        )
+                    )
