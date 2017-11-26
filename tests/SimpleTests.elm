@@ -4,6 +4,7 @@ import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode exposing (Decoder)
 import Json.Encode as Encode
 import List.Nonempty exposing (Nonempty(..))
+import Native.TestHelpers
 import Test exposing (..)
 
 
@@ -258,7 +259,7 @@ map8Test =
 
 
 
---
+-- Unused values
 
 
 noUnusedValuesWithValue : Test
@@ -277,3 +278,16 @@ noUnusedValuesWithValueHelper value =
             value
                 |> Decode.decodeValue (Decode.map (always ()) Decode.value)
                 |> Expect.equal (Decode.Success ())
+
+
+
+-- Invalid JSON Values
+
+
+functionInValueIsBad : Test
+functionInValueIsBad =
+    test "A function in a JSON value results in BadJson" <|
+        \_ ->
+            Native.TestHelpers.jsonWithFunction
+                |> Decode.decodeValue Decode.value
+                |> Expect.equal Decode.BadJson
