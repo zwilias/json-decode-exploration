@@ -48,8 +48,10 @@ simpleUnexpectedTypes =
     , ( Encode.int 12, neutralize Decode.string, "Expected a string" )
     , ( Encode.string "foo", neutralize Decode.bool, "Expected a boolean" )
     , ( Encode.string "foo", neutralize (Decode.list Decode.bool), "Expected an array" )
-    , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), "Expected an object" )
+    , ( Encode.string "bar", Decode.index 0 (Decode.succeed ()), "Expected an array" )
     , ( Encode.list [], Decode.index 0 (Decode.succeed ()), "Expected an array with index 0" )
+    , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), "Expected an object" )
+    , ( Encode.string "bar", Decode.field "foo" (Decode.succeed ()), "Expected an object" )
     , ( Encode.object [], Decode.field "foo" (Decode.succeed ()), "Expected an object with a field 'foo'" )
     ]
         |> List.map (\( val, decoder, expected ) -> simpleUnexpectedType val decoder expected)
@@ -65,7 +67,7 @@ simpleUnexpectedType value decoder expected =
                 (Decode.Failure expected value)
                 []
     in
-    test expected <|
+    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ expected) <|
         \_ ->
             value
                 |> Decode.decodeValue decoder
@@ -253,3 +255,25 @@ map8Test =
             """ [ 1, 2, 3, 4, 5, 6, 7, 8 ] """
                 |> Decode.decodeString decoder
                 |> Expect.equal (Decode.Success 36)
+
+
+
+--
+
+
+noUnusedValuesWithValue : Test
+noUnusedValuesWithValue =
+    [ Encode.list [ Encode.string "foo" ]
+    , Encode.object [ ( "foo", Encode.string "foo" ) ]
+    ]
+        |> List.map noUnusedValuesWithValueHelper
+        |> describe "No unused values in recursive structures when decoding with `value`"
+
+
+noUnusedValuesWithValueHelper : Encode.Value -> Test
+noUnusedValuesWithValueHelper value =
+    test ("No unused values for " ++ Encode.encode 0 value) <|
+        \_ ->
+            value
+                |> Decode.decodeValue (Decode.map (always ()) Decode.value)
+                |> Expect.equal (Decode.Success ())
