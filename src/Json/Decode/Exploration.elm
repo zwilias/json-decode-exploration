@@ -579,13 +579,13 @@ keyValuePairs (Decoder decoderFn) =
         accumulate ( key, value ) acc =
             case ( acc, decoderFn value ) of
                 ( Err e, Err new ) ->
-                    Err <| Nonempty.append new e
+                    Err <| Nonempty.cons (BadField key new) e
 
                 ( Err e, _ ) ->
                     Err e
 
                 ( _, Err e ) ->
-                    Err e
+                    Err <| Nonempty.fromElement (BadField key e)
 
                 ( Ok ( jsonAcc, resAcc ), Ok ( newJson, newRes ) ) ->
                     Ok

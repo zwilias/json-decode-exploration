@@ -291,3 +291,70 @@ functionInValueIsBad =
             Native.TestHelpers.jsonWithFunction
                 |> Decode.decodeValue Decode.value
                 |> Expect.equal Decode.BadJson
+
+
+
+--
+
+
+listCollectsErrors : Test
+listCollectsErrors =
+    let
+        badIndex : Int -> Decode.Error
+        badIndex idx =
+            Decode.BadIndex idx <|
+                Nonempty
+                    (Decode.Failure "Expected a string" (Encode.int idx))
+                    []
+
+        expectedErrors : Decode.Errors
+        expectedErrors =
+            Nonempty (badIndex 0) [ badIndex 1 ]
+    in
+    test "Multiple errors in lists collect" <|
+        \_ ->
+            """ [ 0, 1 ] """
+                |> Decode.decodeString (Decode.list Decode.string)
+                |> Expect.equal (Decode.Errors expectedErrors)
+
+
+indexPropagatesErrors : Test
+indexPropagatesErrors =
+    let
+        badIndex : Int -> Decode.Error
+        badIndex idx =
+            Decode.BadIndex idx <|
+                Nonempty
+                    (Decode.Failure "Expected a string" (Encode.int idx))
+                    []
+
+        expectedErrors : Decode.Errors
+        expectedErrors =
+            Nonempty (badIndex 0) []
+    in
+    test "Errors in indexed decoders propagate" <|
+        \_ ->
+            """ [ 0, 1 ] """
+                |> Decode.decodeString (Decode.index 0 Decode.string)
+                |> Expect.equal (Decode.Errors expectedErrors)
+
+
+keyValuePairsCollectsErrors : Test
+keyValuePairsCollectsErrors =
+    let
+        badField : String -> Decode.Error
+        badField field =
+            Decode.BadField field <|
+                Nonempty
+                    (Decode.Failure "Expected a string" Encode.null)
+                    []
+
+        expectedErrors : Decode.Errors
+        expectedErrors =
+            Nonempty (badField "foo") [ badField "bar" ]
+    in
+    test "Multiple errors in keyValuePairs collect" <|
+        \_ ->
+            """ { "foo": null, "hello": "world", "bar": null } """
+                |> Decode.decodeString (Decode.keyValuePairs Decode.string)
+                |> Expect.equal (Decode.Errors expectedErrors)
