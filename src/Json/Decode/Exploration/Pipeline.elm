@@ -71,6 +71,30 @@ required key valDecoder decoder =
 
 
 {-| Decode a required nested field.
+
+    type alias User =
+        { id : Int
+        , name : String
+        , email : String
+        }
+
+    userDecoder : Decoder User
+    userDecoder =
+        decode User
+            |> required "id" int
+            |> requiredAt [ "profile", "name" ] string
+            |> required "email" string
+
+    """
+    {
+        "id": 123,
+        "email": "sam@example.com",
+        "profile": { "name": "Sam" }
+    }
+    """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
+
 -}
 requiredAt : List String -> Decoder a -> Decoder (a -> b) -> Decoder b
 requiredAt path valDecoder decoder =
