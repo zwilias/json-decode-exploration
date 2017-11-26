@@ -637,7 +637,9 @@ field fieldName (Decoder decoderFn) =
             if key == fieldName then
                 case decoderFn value of
                     Err e ->
-                        ( ( key, value ) :: acc, Just <| Err e )
+                        ( ( key, value ) :: acc
+                        , Just <| Err <| Nonempty.fromElement <| BadField key e
+                        )
 
                     Ok ( newValue, v ) ->
                         ( ( key, newValue ) :: acc
