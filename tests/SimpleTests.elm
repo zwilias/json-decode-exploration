@@ -358,3 +358,60 @@ keyValuePairsCollectsErrors =
             """ { "foo": null, "hello": "world", "bar": null } """
                 |> Decode.decodeString (Decode.keyValuePairs Decode.string)
                 |> Expect.equal (Decode.Errors expectedErrors)
+
+
+
+-- Map2 combines errors
+
+
+map2CombineErrors : Test
+map2CombineErrors =
+    let
+        badIndex : Int -> Decode.Error
+        badIndex idx =
+            Decode.BadIndex idx <|
+                Nonempty
+                    (Decode.Failure "Expected an integer number" Encode.null)
+                    []
+    in
+    [ ( """ [ null, null ] """, Decode.Errors <| Nonempty (badIndex 0) [ badIndex 1 ] )
+    , ( """ [ 1, null ] """, Decode.Errors <| Nonempty (badIndex 1) [] )
+    , ( """ [ null, 1 ] """, Decode.Errors <| Nonempty (badIndex 0) [] )
+    , ( """ [ 1, 2] """, Decode.Success 3 )
+    ]
+        |> List.map (uncurry map2CombineErrorsCase)
+        |> describe "map2 combines errors"
+
+
+map2CombineErrorsCase : String -> Decode.DecodeResult Int -> Test
+map2CombineErrorsCase input expected =
+    test input <|
+        \_ ->
+            input
+                |> Decode.decodeString
+                    (Decode.map2 (+)
+                        (Decode.index 0 Decode.int)
+                        (Decode.index 1 Decode.int)
+                    )
+                |> Expect.equal expected
+
+
+andThenPreservesErrors : Test
+andThenPreservesErrors =
+    let
+        decoder : Decoder ()
+        decoder =
+            Decode.string
+                |> Decode.andThen (\_ -> Decode.succeed ())
+                |> Decode.andThen (\_ -> Decode.succeed ())
+    in
+    test "andThen preserves errors" <|
+        \_ ->
+            "null"
+                |> Decode.decodeString decoder
+                |> Expect.equal
+                    (Decode.Errors <|
+                        Nonempty
+                            (Decode.Failure "Expected a string" Encode.null)
+                            []
+                    )
