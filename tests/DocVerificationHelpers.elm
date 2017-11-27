@@ -6,3 +6,9 @@ type alias User =
     , name : String
     , email : String
     }
+
+
+type Pet
+    = Cat
+    | Dog
+    | Rabbit

@@ -12,6 +12,7 @@ module Json.Decode.Exploration
         , array
         , at
         , bool
+        , check
         , decodeString
         , decodeValue
         , dict
@@ -50,6 +51,11 @@ Examples assume imports:
     import Dict
 
 
+# Run Decoders
+
+@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning
+
+
 # Primitives
 
 @docs Decoder, string, bool, int, float
@@ -70,9 +76,9 @@ Examples assume imports:
 @docs maybe, oneOf
 
 
-# Run Decoders
+# Fancy Decoding
 
-@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning
+@docs lazy, value, null, check, succeed, fail, andThen
 
 
 # Mapping
@@ -84,10 +90,10 @@ which makes it easier to handle large objects.
 
 @docs map, map2, map3, map4, map5, map6, map7, map8, andMap
 
+Last but not least, an extra import to allow elm-verify-examples to actually
+verify all the examples:
 
-# Fancy Decoding
-
-@docs lazy, value, null, succeed, fail, andThen
+    import DocVerificationHelpers exposing (Pet(..))
 
 -}
 
@@ -784,6 +790,45 @@ lazy toDecoder =
                     toDecoder ()
             in
             decoderFn json
+
+
+
+-- Extras
+
+
+{-| Useful for checking a value in the JSON matches the value you expect it to
+have. If it does, succeeds with the second decoder. If it doesn't it fails.
+
+This can be used to decode union types:
+
+    type Pet = Cat | Dog | Rabbit
+
+    petDecoder : Decoder Pet
+    petDecoder =
+        oneOf
+            [ check string "cat" <| succeed Cat
+            , check string "dog" <| succeed Dog
+            , check string "rabbit" <| succeed Rabbit
+            ]
+
+    """ [ "dog", "rabbit", "cat" ] """
+        |> decodeString (list petDecoder)
+    --> Success [ Dog, Rabbit, Cat ]
+
+-}
+check : Decoder a -> a -> Decoder b -> Decoder b
+check checkDecoder expected actualDecoder =
+    checkDecoder
+        |> andThen
+            (\actual ->
+                if actual == expected then
+                    actualDecoder
+                else
+                    fail <|
+                        "Verification failed, expected '"
+                            ++ toString expected
+                            ++ "'."
+            )
 
 
 
