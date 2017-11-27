@@ -7,7 +7,7 @@ Made with ❤️ and released under BSD3.
 
 ## Changelog
 
-### Unreleased
+### 4.2.0
 
 #### Added
 
