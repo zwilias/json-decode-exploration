@@ -1,8 +1,12 @@
 module Json.Decode.Exploration.Pipeline
     exposing
-        ( custom
+        ( checked
+        , checkedAt
+        , custom
         , decode
         , hardcoded
+        , ignored
+        , ignoredAt
         , optional
         , optionalAt
         , required
@@ -23,6 +27,11 @@ Use the `(|>)` operator to build JSON decoders.
 @docs required, requiredAt, optional, optionalAt, hardcoded, custom
 
 
+## Validating the JSON without using the values
+
+@docs checked, checkedAt, ignored, ignoredAt
+
+
 ## Beginning and ending pipelines
 
 @docs decode, resolve
@@ -34,6 +43,8 @@ The examples all expect imports set up like this:
 
     import Json.Decode.Exploration exposing (..)
     import Json.Decode.Exploration.Pipeline exposing (..)
+    import Json.Encode as Encode
+    import List.Nonempty as Nonempty
 
 For automated verification of these examples, this import is also required.
 Please ignore it.
@@ -71,6 +82,30 @@ required key valDecoder decoder =
 
 
 {-| Decode a required nested field.
+
+    type alias User =
+        { id : Int
+        , name : String
+        , email : String
+        }
+
+    userDecoder : Decoder User
+    userDecoder =
+        decode User
+            |> required "id" int
+            |> requiredAt [ "profile", "name" ] string
+            |> required "email" string
+
+    """
+    {
+        "id": 123,
+        "email": "sam@example.com",
+        "profile": { "name": "Sam" }
+    }
+    """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
+
 -}
 requiredAt : List String -> Decoder a -> Decoder (a -> b) -> Decoder b
 requiredAt path valDecoder decoder =
@@ -112,25 +147,21 @@ values if you need to:
 
 -}
 optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
-optional key valDecoder fallback decoder =
-    custom (optionalDecoder [ key ] valDecoder fallback) decoder
+optional key =
+    optionalAt [ key ]
 
 
 {-| Decode an optional nested field.
 -}
 optionalAt : List String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optionalAt path valDecoder fallback decoder =
-    custom (optionalDecoder path valDecoder fallback) decoder
-
-
-optionalDecoder : List String -> Decoder a -> a -> Decoder a
-optionalDecoder path valDecoder fallback =
     Decode.oneOf
         [ Decode.at path (Decode.null <| Decode.succeed fallback)
         , Decode.at path (Decode.succeed <| Decode.at path valDecoder)
         , Decode.succeed (Decode.succeed fallback)
         ]
         |> resolve
+        |> flip Decode.andMap decoder
 
 
 {-| Rather than decoding anything, use a fixed value for the next step in the
@@ -157,6 +188,111 @@ pipeline. `harcoded` does not look at the JSON at all.
 hardcoded : a -> Decoder (a -> b) -> Decoder b
 hardcoded =
     Decode.andMap << Decode.succeed
+
+
+{-| `check` a field in the JSON to ensure it has a certain value before allowing
+the decoder to succeed.
+
+    type alias User =
+        { id : Int
+        , name : String
+        , email : String
+        }
+
+    userDecoder : Decoder User
+    userDecoder =
+        decode User
+            |> required "id" int
+            |> required "name" string
+            |> required "email" string
+            |> checked "enabled" bool True
+
+    """
+    {
+        "id": 123,
+        "email": "sam@example.com",
+        "name": "Sam",
+        "enabled": true
+    }
+    """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
+
+    """
+    {
+        "id": 123,
+        "email": "sam@example.com",
+        "name": "Sam",
+        "enabled": false
+    }
+    """
+        |> decodeString userDecoder
+    --> Errors expectedErrors
+
+    expectedErrors : Errors
+    expectedErrors =
+        Failure "Verification failed, expected 'True'."  (Encode.bool False)
+            |> Nonempty.fromElement
+            |> BadField "enabled"
+            |> Nonempty.fromElement
+
+-}
+checked : String -> Decoder a -> a -> Decoder b -> Decoder b
+checked fieldName =
+    checkedAt [ fieldName ]
+
+
+{-| Check a field at a certain path and validate its content before allowing
+decoding to succeed.
+-}
+checkedAt : List String -> Decoder a -> a -> Decoder b -> Decoder b
+checkedAt path decoder expectedValue next =
+    Decode.succeed ()
+        |> Decode.check decoder expectedValue
+        |> Decode.at path
+        |> Decode.andThen (\_ -> next)
+
+
+{-| Ignore a field from decoding. By using `ignored`, you acknowledge that it is
+in the JSON so warnings don't show up.
+
+    type alias User =
+        { id : Int
+        , name : String
+        , email : String
+        }
+
+    userDecoder : Decoder User
+    userDecoder =
+        decode User
+            |> required "id" int
+            |> required "name" string
+            |> required "email" string
+            |> ignored "enabled"
+
+    """
+    {
+        "id": 123,
+        "email": "sam@example.com",
+        "name": "Sam",
+        "enabled": "No one cares, it's ignored."
+    }
+    """
+        |> decodeString userDecoder
+    --> Success { id = 123, name = "Sam", email = "sam@example.com" }
+
+-}
+ignored : String -> Decoder a -> Decoder a
+ignored field =
+    ignoredAt [ field ]
+
+
+{-| Ignore a value at a certain path from decoding. By using `ignoredAt`, you
+acknowledge that it is in the JSON so warnings don't show up.
+-}
+ignoredAt : List String -> Decoder a -> Decoder a
+ignoredAt path decoder =
+    Decode.at path Decode.value |> Decode.andThen (\_ -> decoder)
 
 
 {-| Run the given decoder and feed its result into the pipeline at this point.

@@ -12,6 +12,7 @@ module Json.Decode.Exploration
         , array
         , at
         , bool
+        , check
         , decodeString
         , decodeValue
         , dict
@@ -37,8 +38,8 @@ module Json.Decode.Exploration
         , oneOf
         , string
         , succeed
-        , value
         , toResult
+        , value
         )
 
 {-| Like the regular decoders, except
@@ -47,6 +48,13 @@ Examples assume imports:
 
     import Json.Encode as Encode
     import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
+    import Array
+    import Dict
+
+
+# Run Decoders
+
+@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning, toResult
 
 
 # Primitives
@@ -69,9 +77,9 @@ Examples assume imports:
 @docs maybe, oneOf
 
 
-# Run Decoders
+# Fancy Decoding
 
-@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning, toResult
+@docs lazy, value, null, check, succeed, fail, andThen
 
 
 # Mapping
@@ -83,10 +91,10 @@ which makes it easier to handle large objects.
 
 @docs map, map2, map3, map4, map5, map6, map7, map8, andMap
 
+Last but not least, an extra import to allow elm-verify-examples to actually
+verify all the examples:
 
-# Fancy Decoding
-
-@docs lazy, value, null, succeed, fail, andThen
+    import DocVerificationHelpers exposing (Pet(..))
 
 -}
 
@@ -259,11 +267,11 @@ renderError error =
     case error of
         BadField field errors ->
             ("In field `" ++ field ++ "`")
-                :: (renderErrors errors)
+                :: renderErrors errors
 
         BadIndex index errors ->
             ("At index " ++ toString index)
-                :: (renderErrors errors)
+                :: renderErrors errors
 
         BadOneOf errorList ->
             case errorList of
@@ -275,10 +283,10 @@ renderError error =
                         renderedErrors : List String
                         renderedErrors =
                             errorList
-                                |> List.concatMap (renderErrors)
+                                |> List.concatMap renderErrors
                     in
-                        "I encountered a bad `oneOf`. The following issues occurred:"
-                            :: renderedErrors
+                    "I encountered a bad `oneOf`. The following issues occurred:"
+                        :: renderedErrors
 
         Failure message value ->
             let
@@ -289,7 +297,7 @@ renderError error =
                         |> String.lines
                         |> List.map indent
             in
-                message :: "While trying to decode this value:" :: renderedValue ++ [ "" ]
+            message :: "While trying to decode this value:" :: renderedValue ++ [ "" ]
 
 
 
@@ -536,21 +544,26 @@ list (Decoder decoderFn) =
                 ( Ok ( jsonAcc, valAcc ), Ok ( json, val ) ) ->
                     ( idx - 1, Ok ( json :: jsonAcc, val :: valAcc ) )
     in
-        Decoder <|
-            \json ->
-                case json of
-                    Array _ values ->
-                        List.foldr accumulate
-                            ( List.length values - 1, Ok ( [], [] ) )
-                            values
-                            |> Tuple.second
-                            |> Result.map (Tuple.mapFirst (Array True))
+    Decoder <|
+        \json ->
+            case json of
+                Array _ values ->
+                    List.foldr accumulate
+                        ( List.length values - 1, Ok ( [], [] ) )
+                        values
+                        |> Tuple.second
+                        |> Result.map (Tuple.mapFirst (Array True))
 
-                    _ ->
-                        expected "an array" json
+                _ ->
+                    expected "an array" json
 
 
 {-| _Convenience function._ Decode a JSON array into an Elm `Array`.
+
+    """ [ 1, 2, 3 ] """
+        |> decodeString (array int)
+    --> Success <| Array.fromList [ 1, 2, 3 ]
+
 -}
 array : Decoder a -> Decoder (Array a)
 array decoder =
@@ -558,6 +571,14 @@ array decoder =
 
 
 {-| _Convenience function._ Decode a JSON object into an Elm `Dict String`.
+
+    """ { "foo": "bar", "bar": "hi there" } """
+        |> decodeString (dict string)
+    --> Success <| Dict.fromList
+    -->   [ ( "bar", "hi there" )
+    -->   , ( "foo", "bar" )
+    -->   ]
+
 -}
 dict : Decoder v -> Decoder (Dict String v)
 dict decoder =
@@ -620,18 +641,18 @@ index idx (Decoder decoderFn) =
                 , result
                 )
     in
-        Decoder <|
-            \json ->
-                case json of
-                    Array _ values ->
-                        List.foldr
-                            accumulate
-                            ( List.length values - 1, [], Nothing )
-                            values
-                            |> finalize json
+    Decoder <|
+        \json ->
+            case json of
+                Array _ values ->
+                    List.foldr
+                        accumulate
+                        ( List.length values - 1, [], Nothing )
+                        values
+                        |> finalize json
 
-                    _ ->
-                        expected "an array" json
+                _ ->
+                    expected "an array" json
 
 
 {-| Decode a JSON object into a list of key-value pairs. The decoder you provide
@@ -652,13 +673,13 @@ keyValuePairs (Decoder decoderFn) =
         accumulate ( key, value ) acc =
             case ( acc, decoderFn value ) of
                 ( Err e, Err new ) ->
-                    Err <| Nonempty.append new e
+                    Err <| Nonempty.cons (BadField key new) e
 
                 ( Err e, _ ) ->
                     Err e
 
                 ( _, Err e ) ->
-                    Err e
+                    Err <| Nonempty.fromElement (BadField key e)
 
                 ( Ok ( jsonAcc, resAcc ), Ok ( newJson, newRes ) ) ->
                     Ok
@@ -666,15 +687,15 @@ keyValuePairs (Decoder decoderFn) =
                         , ( key, newRes ) :: resAcc
                         )
     in
-        Decoder <|
-            \json ->
-                case json of
-                    Object _ kvPairs ->
-                        List.foldr accumulate (Ok ( [], [] )) kvPairs
-                            |> Result.map (Tuple.mapFirst (Object True))
+    Decoder <|
+        \json ->
+            case json of
+                Object _ kvPairs ->
+                    List.foldr accumulate (Ok ( [], [] )) kvPairs
+                        |> Result.map (Tuple.mapFirst (Object True))
 
-                    _ ->
-                        expected "an object" json
+                _ ->
+                    expected "an object" json
 
 
 {-| Decode the content of a field using a provided decoder.
@@ -710,7 +731,9 @@ field fieldName (Decoder decoderFn) =
             if key == fieldName then
                 case decoderFn value of
                     Err e ->
-                        ( ( key, value ) :: acc, Just <| Err e )
+                        ( ( key, value ) :: acc
+                        , Just <| Err <| Nonempty.fromElement <| BadField key e
+                        )
 
                     Ok ( newValue, v ) ->
                         ( ( key, newValue ) :: acc
@@ -734,15 +757,15 @@ field fieldName (Decoder decoderFn) =
                 Just (Ok v) ->
                     Ok ( Object True values, v )
     in
-        Decoder <|
-            \json ->
-                case json of
-                    Object _ kvPairs ->
-                        List.foldr accumulate ( [], Nothing ) kvPairs
-                            |> finalize json
+    Decoder <|
+        \json ->
+            case json of
+                Object _ kvPairs ->
+                    List.foldr accumulate ( [], Nothing ) kvPairs
+                        |> finalize json
 
-                    _ ->
-                        expected "an object" json
+                _ ->
+                    expected "an object" json
 
 
 {-| Decodes a value at a certain path, using a provided decoder. Essentially,
@@ -854,7 +877,46 @@ lazy toDecoder =
                 (Decoder decoderFn) =
                     toDecoder ()
             in
-                decoderFn json
+            decoderFn json
+
+
+
+-- Extras
+
+
+{-| Useful for checking a value in the JSON matches the value you expect it to
+have. If it does, succeeds with the second decoder. If it doesn't it fails.
+
+This can be used to decode union types:
+
+    type Pet = Cat | Dog | Rabbit
+
+    petDecoder : Decoder Pet
+    petDecoder =
+        oneOf
+            [ check string "cat" <| succeed Cat
+            , check string "dog" <| succeed Dog
+            , check string "rabbit" <| succeed Rabbit
+            ]
+
+    """ [ "dog", "rabbit", "cat" ] """
+        |> decodeString (list petDecoder)
+    --> Success [ Dog, Rabbit, Cat ]
+
+-}
+check : Decoder a -> a -> Decoder b -> Decoder b
+check checkDecoder expected actualDecoder =
+    checkDecoder
+        |> andThen
+            (\actual ->
+                if actual == expected then
+                    actualDecoder
+                else
+                    fail <|
+                        "Verification failed, expected '"
+                            ++ toString expected
+                            ++ "'."
+            )
 
 
 
@@ -887,7 +949,7 @@ andThen toDecoderB (Decoder decoderFnA) =
                         (Decoder decoderFnB) =
                             toDecoderB valA
                     in
-                        decoderFnB newJson
+                    decoderFnB newJson
 
                 Err e ->
                     Err e
