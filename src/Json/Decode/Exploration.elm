@@ -21,6 +21,8 @@ module Json.Decode.Exploration
         , float
         , index
         , int
+        , isArray
+        , isObject
         , keyValuePairs
         , lazy
         , list
@@ -64,6 +66,11 @@ Examples assume imports:
 # Data Structures
 
 @docs nullable, list, array, dict, keyValuePairs
+
+
+# Structural ascertainments
+
+@docs isObject, isArray
 
 
 # Object Primitives
@@ -495,6 +502,59 @@ array decoder =
 dict : Decoder v -> Decoder (Dict String v)
 dict decoder =
     map Dict.fromList (keyValuePairs decoder)
+
+
+{-| A Decoder to ascertain that a JSON value _is_ in fact, a JSON object.
+
+Using this decoder marks the object itself as used, without touching any of its
+children. It is, as such, fairly well behaved.
+
+    """ { } """
+        |> decodeString isObject
+    --> Success ()
+
+
+    """ [] """
+        |> decodeString isObject
+    --> Errors <| Nonempty.fromElement <| Failure "Expected an object" (Encode.list [])
+
+-}
+isObject : Decoder ()
+isObject =
+    Decoder <|
+        \json ->
+            case json of
+                Object _ pairs ->
+                    Ok ( Object True pairs, () )
+
+                _ ->
+                    expected "an object" json
+
+
+{-| Similar to `isObject`, a decoder to ascertain that a JSON value is a JSON
+array.
+
+    """ [] """
+        |> decodeString isArray
+    --> Success ()
+
+
+    """ [ "foo" ] """
+        |> decodeString isArray
+    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (UnusedValue <|
+            Encode.string "foo") [])) []) ()
+
+-}
+isArray : Decoder ()
+isArray =
+    Decoder <|
+        \json ->
+            case json of
+                Array _ values ->
+                    Ok ( Array True values, () )
+
+                _ ->
+                    expected "an array" json
 
 
 {-| Decode a specific index using a specified `Decoder`.

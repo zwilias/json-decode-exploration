@@ -3,7 +3,7 @@ module SimpleTests exposing (..)
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode exposing (Decoder)
 import Json.Encode as Encode
-import List.Nonempty exposing (Nonempty(..))
+import List.Nonempty as Nonempty exposing (Nonempty(..))
 import Native.TestHelpers
 import Test exposing (..)
 
@@ -415,3 +415,20 @@ andThenPreservesErrors =
                             (Decode.Failure "Expected a string" Encode.null)
                             []
                     )
+
+
+decodingAFieldDoesNotMarkTheOthersAsUsed : Test
+decodingAFieldDoesNotMarkTheOthersAsUsed =
+    let
+        expectedWarnings : Nonempty Decode.Warning
+        expectedWarnings =
+            Decode.UnusedValue Encode.null
+                |> Nonempty.fromElement
+                |> Decode.InField "baz"
+                |> Nonempty.fromElement
+    in
+    test "Decoding a single field generates unused warnings for the other fields" <|
+        \_ ->
+            """ { "foo": "bar", "baz": null } """
+                |> Decode.decodeString (Decode.field "foo" Decode.string)
+                |> Expect.equal (Decode.WithWarnings expectedWarnings "bar")
