@@ -43,6 +43,15 @@ optionalWrongStructure =
                 |> Expect.equal (Errors (Nonempty (Failure "Expected an object" (Encode.list [])) []))
 
 
+optionalUnusedField : Test
+optionalUnusedField =
+    test "decoding an optional field in an object with one other field should warn about other field" <|
+        \_ ->
+            """ { "a": 1 } """
+                |> decodeString (decode identity |> optional "b" string "hi")
+                |> Expect.equal (WithWarnings (Nonempty (UnusedValue (Encode.object [ ( "a", Encode.int 1 ) ])) []) "hi")
+
+
 optionalAtWrongStructure : Test
 optionalAtWrongStructure =
     let
