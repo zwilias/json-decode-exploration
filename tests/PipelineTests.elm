@@ -3,6 +3,8 @@ module PipelineTests exposing (..)
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode exposing (..)
 import Json.Decode.Exploration.Pipeline exposing (..)
+import Json.Encode as Encode
+import List.Nonempty as Nonempty exposing (Nonempty(..))
 import Test exposing (..)
 
 
@@ -21,3 +23,40 @@ optionalAtTest =
                     |> decodeString decoder
                     |> Expect.equal (Success <| Just [ 1, 2, 3 ])
         ]
+
+
+optionalEmptyStructure : Test
+optionalEmptyStructure =
+    test "decoding an optional field in an empty object should mark the object as used" <|
+        \_ ->
+            """ {} """
+                |> decodeString (decode identity |> optional "foo" string "hi")
+                |> Expect.equal (Success "hi")
+
+
+optionalWrongStructure : Test
+optionalWrongStructure =
+    test "Decoding an optional field fails if the item is not, in fact, an object" <|
+        \_ ->
+            """ [] """
+                |> decodeString (decode identity |> optional "foo" string "hi")
+                |> Expect.equal (Errors (Nonempty (Failure "Expected an object" (Encode.list [])) []))
+
+
+optionalAtWrongStructure : Test
+optionalAtWrongStructure =
+    let
+        expectedErrors : Nonempty Error
+        expectedErrors =
+            Failure "Expected an object" (Encode.list [])
+                |> Nonempty.fromElement
+                |> BadField "b"
+                |> Nonempty.fromElement
+                |> BadField "a"
+                |> Nonempty.fromElement
+    in
+    test "Using optionalAt where a field on the path is of an unexpected type fails" <|
+        \_ ->
+            """ { "a": { "b": [] } } """
+                |> decodeString (decode identity |> optionalAt [ "a", "b", "c" ] string "hi")
+                |> Expect.equal (Errors expectedErrors)

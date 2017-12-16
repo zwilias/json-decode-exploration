@@ -147,21 +147,31 @@ values if you need to:
 
 -}
 optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
-optional key =
-    optionalAt [ key ]
+optional key valDecoder fallback decoder =
+    optionalField key valDecoder fallback
+        |> flip Decode.andMap decoder
 
 
 {-| Decode an optional nested field.
 -}
 optionalAt : List String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optionalAt path valDecoder fallback decoder =
-    Decode.oneOf
-        [ Decode.at path (Decode.null <| Decode.succeed fallback)
-        , Decode.at path (Decode.succeed <| Decode.at path valDecoder)
-        , Decode.succeed (Decode.succeed fallback)
-        ]
-        |> resolve
+    List.foldr (\f d -> optionalField f d fallback) valDecoder path
         |> flip Decode.andMap decoder
+
+
+optionalField : String -> Decoder a -> a -> Decoder a
+optionalField field decoder fallback =
+    Decode.keyValuePairs Decode.value
+        |> Decode.andThen
+            (\_ ->
+                Decode.oneOf
+                    [ Decode.field field (Decode.null <| Decode.succeed fallback)
+                    , Decode.field field (Decode.succeed <| Decode.field field decoder)
+                    , Decode.succeed (Decode.succeed fallback)
+                    ]
+                    |> resolve
+            )
 
 
 {-| Rather than decoding anything, use a fixed value for the next step in the
