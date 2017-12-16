@@ -7,6 +7,21 @@ Made with ❤️ and released under BSD3.
 
 ## Changelog
 
+### 4.2.1
+
+#### Changed
+
+- `Json.Decode.Exploration.Pipeline.optional` and `optionalAt` now error when
+  used on something that is not an object. The clue is that each field in the
+  path is optional in the existential sense - if it simply does not exist, we
+  dutifully use the provided fallback. However, if a field exists but does not
+  point to an object, we now error out instead.
+- as a side effect, both of the above now correctly mark empty objects as having
+  been used, rather than giving a warning when using `optional` on an empty
+  object.
+  
+Thanks to [@michaeljones](https://github.com/michaeljones) for surfacing this in #3.
+
 ### 4.2.0
 
 #### Added

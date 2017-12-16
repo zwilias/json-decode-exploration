@@ -145,6 +145,21 @@ values if you need to:
             |> optional "name" (oneOf [ string, null "NULL" ]) "MISSING"
             |> required "email" string
 
+Note also that this behaves _slightly_ different than the stock pipeline
+package.
+
+In the stock pipeline package, running the following decoder with an array as
+the input would _succeed_.
+
+    fooDecoder =
+        decode identity
+            |> optional "foo" (maybe string) Nothing
+
+In this package, such a decoder will error out instead, saying that it expected
+the input to be an object. The _key_ `"foo"` is optional, but it really does
+have to be an object before we even consider trying your decoder or returning
+the fallback.
+
 -}
 optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optional key valDecoder fallback decoder =
