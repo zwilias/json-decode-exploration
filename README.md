@@ -3,9 +3,27 @@
 I should really write some elevator-pitch style examples to include here. Oh
 well.
 
-Made with ❤️ and released under BSD3.
+Made with ❤️  and released under BSD3. My eternal thanks to
+[@michaeljones](https://github.com/michaeljones) for his invaluable feedback and
+continued discovery of edge-cases and bugs!
+
+---
 
 ## Changelog
+
+### 4.3.0
+
+#### Added
+
+- `Json.Decode.Exploration`:
+    - `isObject` and `isArray`: ascertainments about structure without using
+      contained values
+
+#### Changed
+
+- `Json.Decode.Exploration.Pipeline`:
+    - `optional` and `optionalAt` now use `isObject` to prevent marking unused
+      contained values as having been used.
 
 ### 4.2.1
 
@@ -20,8 +38,6 @@ Made with ❤️ and released under BSD3.
   been used, rather than giving a warning when using `optional` on an empty
   object.
   
-Thanks to [@michaeljones](https://github.com/michaeljones) for surfacing this in #3.
-
 ### 4.2.0
 
 #### Added
@@ -30,8 +46,6 @@ Thanks to [@michaeljones](https://github.com/michaeljones) for surfacing this in
 - `Json.Decode.Exploration.Pipeline`:
     - `checked` and `checkedAt`: verify values during decoding
     - `ignored` and `ignoredAt`: completely ignore values during decoding
-
-Thanks to [@michaeljones](https://github.com/michaeljones) for the proposal.
 
 #### Changed
 
