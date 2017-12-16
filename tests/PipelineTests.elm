@@ -34,6 +34,23 @@ optionalEmptyStructure =
                 |> Expect.equal (Success "hi")
 
 
+optionalUnusedField : Test
+optionalUnusedField =
+    let
+        expectedWarnings : Nonempty Warning
+        expectedWarnings =
+            UnusedValue (Encode.int 1)
+                |> Nonempty.fromElement
+                |> InField "a"
+                |> Nonempty.fromElement
+    in
+    test "decoding an optional field in an object with one other field should warn about other field" <|
+        \_ ->
+            """ { "a": 1 } """
+                |> decodeString (decode identity |> optional "b" string "hi")
+                |> Expect.equal (WithWarnings expectedWarnings "hi")
+
+
 optionalWrongStructure : Test
 optionalWrongStructure =
     test "Decoding an optional field fails if the item is not, in fact, an object" <|

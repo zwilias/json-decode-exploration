@@ -177,7 +177,7 @@ optionalAt path valDecoder fallback decoder =
 
 optionalField : String -> Decoder a -> a -> Decoder a
 optionalField field decoder fallback =
-    Decode.keyValuePairs Decode.value
+    Decode.isObject
         |> Decode.andThen
             (\_ ->
                 Decode.oneOf
