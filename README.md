@@ -1,4 +1,4 @@
-# JSON Decode Exploration [![Build Status](https://travis-ci.org/zwilias/json-decode-exploration.svg?branch=master)](https://travis-ci.org/zwilias/json-decode-exploration)
+# JSON Decode Exploration [![Build Status](https://travis-ci.org/zwilias/json-decode-exploration.svg?branch=master)](https://travis-ci.org/zwilias/json-decode-exploration) [![codecov](https://codecov.io/gh/zwilias/json-decode-exploration/branch/master/graph/badge.svg)](https://codecov.io/gh/zwilias/json-decode-exploration)
 
 I should really write some elevator-pitch style examples to include here. Oh
 well.
