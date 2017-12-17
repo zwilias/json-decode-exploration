@@ -1,7 +1,7 @@
 {
     "scripts": {
         "test": "elm-format --validate src && elm-verify-examples && npm run coverage",
-        "coverage": "elm-coverage --report codecov --elm-test ./node_modules/.bin/elm-test && codecov"
+        "coverage": "elm-coverage --report codecov --elm-test ./node_modules/.bin/elm-test && codecov --disable=gcov -f .coverage/codecov.json"
     },
     "dependencies": {
         "codecov": "^3.0.0",
