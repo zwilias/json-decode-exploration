@@ -544,6 +544,11 @@ array.
     --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (UnusedValue <|
             Encode.string "foo") [])) []) ()
 
+
+    """ null """
+        |> decodeString isArray
+    --> Errors <| Nonempty.fromElement <| Failure "Expected an array" Encode.null
+
 -}
 isArray : Decoder ()
 isArray =
