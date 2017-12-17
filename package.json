@@ -1,11 +1,11 @@
 {
     "scripts": {
         "test": "elm-format --validate src && elm-verify-examples && npm run coverage",
-	"coverage": "elm-coverage --report codecov --elm-test ./node_modules/.bin/elm-test && codecov"
+        "coverage": "elm-coverage --report codecov --elm-test ./node_modules/.bin/elm-test && codecov"
     },
     "dependencies": {
         "codecov": "^3.0.0",
-        "elm-coverage": "^0.1.1",
+        "elm-coverage": "^0.1.2",
         "elm-format": "^0.7.0-exp",
         "elm-test": "^0.18.9",
         "elm-verify-examples": "^1.0.2"
