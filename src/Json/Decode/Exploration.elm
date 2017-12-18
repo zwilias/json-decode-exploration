@@ -40,6 +40,7 @@ module Json.Decode.Exploration
         , oneOf
         , string
         , succeed
+        , toResult
         , value
         )
 
@@ -55,7 +56,7 @@ Examples assume imports:
 
 # Run Decoders
 
-@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning
+@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning, toResult
 
 
 # Primitives
@@ -221,6 +222,93 @@ decodeString decoder jsonString =
 
         Ok json ->
             decodeValue decoder json
+
+
+{-| TODO
+-}
+toResult : DecodeResult a -> Result String a
+toResult result =
+    case result of
+        BadJson ->
+            Err "I encountered a bad JSON. Check for mistakes in the string, or for circular references in the `Value`."
+
+        Errors errors ->
+            Err <| errorsToString errors
+
+        WithWarnings warnings a ->
+            Ok a
+
+        Success a ->
+            Ok a
+
+
+
+-- Stringification or errors
+
+
+errorsToString : Errors -> String
+errorsToString errors =
+    "I ran into an issue while decoding:\n"
+        ++ (renderErrors errors |> String.join "\n")
+
+
+errorToString : Error -> List String
+errorToString =
+    renderError
+
+
+renderErrors : Errors -> List String
+renderErrors errors =
+    Nonempty.toList errors
+        |> List.concatMap renderError
+        |> List.map indent
+
+
+indent : String -> String
+indent =
+    (++) "  " >> String.trimRight
+
+
+renderError : Error -> List String
+renderError error =
+    case error of
+        BadField field errors ->
+            ("In field `" ++ field ++ "`")
+                :: renderErrors errors
+
+        BadIndex index errors ->
+            ("At index " ++ toString index)
+                :: renderErrors errors
+
+        BadOneOf errorList ->
+            case errorList of
+                [] ->
+                    [ "I encountered a `oneOf` without any options.", "" ]
+
+                _ ->
+                    let
+                        renderedErrors : List String
+                        renderedErrors =
+                            errorList
+                                |> List.concatMap renderErrors
+                    in
+                    "I encountered a bad `oneOf`. The following issues occurred:"
+                        :: renderedErrors
+
+        Failure message value ->
+            let
+                renderedValue : List String
+                renderedValue =
+                    value
+                        |> Encode.encode 2
+                        |> String.lines
+                        |> List.map indent
+            in
+            message :: "While trying to decode this value:" :: renderedValue ++ [ "" ]
+
+
+
+-- Decoders
 
 
 {-| A decoder that will ignore the actual JSON and succeed with the provided
