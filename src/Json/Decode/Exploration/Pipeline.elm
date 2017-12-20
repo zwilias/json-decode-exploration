@@ -257,8 +257,9 @@ the decoder to succeed.
     expectedErrors : Errors
     expectedErrors =
         Failure "Verification failed, expected 'True'."  (Encode.bool False)
+            |> Pure
             |> Nonempty.fromElement
-            |> BadField "enabled"
+            |> InField "enabled"
             |> Nonempty.fromElement
 
 -}

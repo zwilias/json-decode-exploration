@@ -4,6 +4,7 @@ module Json.Decode.Exploration
         , Decoder
         , Error(..)
         , Errors
+        , Located(..)
         , Value
         , Warning(..)
         , Warnings
@@ -55,7 +56,7 @@ Examples assume imports:
 
 # Run Decoders
 
-@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning
+@docs decodeString, decodeValue, DecodeResult, Value, Located, Errors, Error, Warnings, Warning
 
 
 # Primitives
@@ -117,6 +118,13 @@ type alias Value =
     Decode.Value
 
 
+{-| -}
+type Located a
+    = InField String (Nonempty (Located a))
+    | AtIndex Int (Nonempty (Located a))
+    | Pure a
+
+
 {-| Decoding may fail with 1 or more errors, so `Errors` is a
 [`Nonempty`][nonempty] of errors.
 
@@ -124,7 +132,7 @@ type alias Value =
 
 -}
 type alias Errors =
-    Nonempty Error
+    Nonempty (Located Error)
 
 
 {-| The most basic kind of an `Error` is `Failure`, which comes annotated with
@@ -135,9 +143,7 @@ The other cases describe the "path" to where the error occurred.
 
 -}
 type Error
-    = BadField String Errors
-    | BadIndex Int Errors
-    | BadOneOf (List Errors)
+    = BadOneOf (List Errors)
     | Failure String Value
 
 
@@ -145,16 +151,14 @@ type Error
 will have 1 or more warnings, as a `Nonempty` list.
 -}
 type alias Warnings =
-    Nonempty Warning
+    Nonempty (Located Warning)
 
 
 {-| Like with errors, the most basic warning is an unused value. The other cases
 describe the path to the warnings.
 -}
 type Warning
-    = InField String Warnings
-    | AtIndex Int Warnings
-    | UnusedValue Value
+    = UnusedValue Value
 
 
 {-| Decoding can have 4 different outcomes:
@@ -237,7 +241,7 @@ warning.
     """ null """
         |> decodeString (succeed "hello world")
     --> WithWarnings
-    -->     (Nonempty (UnusedValue Encode.null) [])
+    -->     (Nonempty (Pure <| UnusedValue Encode.null) [])
     -->     "hello world"
 
 
@@ -255,7 +259,7 @@ succeed val =
 
     """ "hello" """
         |> decodeString (fail "failure")
-    --> Errors (Nonempty (Failure "failure" (Encode.string "hello")) [])
+    --> Errors (Nonempty (Pure <| Failure "failure" (Encode.string "hello")) [])
 
 -}
 fail : String -> Decoder a
@@ -264,6 +268,7 @@ fail message =
         \json ->
             encode json
                 |> Failure message
+                |> Pure
                 |> Nonempty.fromElement
                 |> Err
 
@@ -277,7 +282,7 @@ fail message =
 
     """ 123 """
         |> decodeString string
-    --> Errors (Nonempty (Failure "Expected a string" (Encode.int 123)) [])
+    --> Errors (Nonempty (Pure <| Failure "Expected a string" (Encode.int 123)) [])
 
 -}
 string : Decoder String
@@ -323,7 +328,7 @@ value =
 
     """ null """
         |> decodeString float
-    --> Errors (Nonempty (Failure "Expected a number" Encode.null) [])
+    --> Errors (Nonempty (Pure <| Failure "Expected a number" Encode.null) [])
 
 -}
 float : Decoder Float
@@ -349,7 +354,7 @@ float =
         |> decodeString int
     --> Errors <|
     -->   Nonempty
-    -->     (Failure "Expected an integer number" (Encode.float 0.1))
+    -->     (Pure <| Failure "Expected an integer number" (Encode.float 0.1))
     -->     []
 
 -}
@@ -405,7 +410,7 @@ verify that a field is _missing_, only that it is explicitly set to `null`.
         |> decodeString (field "foo" (null ()))
     --> Errors <|
     -->   Nonempty
-    -->     (Failure "Expected an object with a field 'foo'" (Encode.object []))
+    -->     (Pure <| Failure "Expected an object with a field 'foo'" (Encode.object []))
     -->     []
 
 -}
@@ -432,8 +437,8 @@ null val =
         |> decodeString (list string)
     --> Errors <|
     -->   Nonempty
-    -->     (BadIndex 1 <|
-    -->       Nonempty (Failure "Expected a string" Encode.null) []
+    -->     (AtIndex 1 <|
+    -->       Nonempty (Pure <| Failure "Expected a string" Encode.null) []
     -->     )
     -->     []
 
@@ -449,7 +454,7 @@ list (Decoder decoderFn) =
             case ( acc, decoderFn value ) of
                 ( Err errors, Err newErrors ) ->
                     ( idx - 1
-                    , Err <| Nonempty.cons (BadIndex idx newErrors) errors
+                    , Err <| Nonempty.cons (AtIndex idx newErrors) errors
                     )
 
                 ( Err errors, _ ) ->
@@ -457,7 +462,7 @@ list (Decoder decoderFn) =
 
                 ( _, Err errors ) ->
                     ( idx - 1
-                    , Err <| Nonempty.fromElement (BadIndex idx errors)
+                    , Err <| Nonempty.fromElement (AtIndex idx errors)
                     )
 
                 ( Ok ( jsonAcc, valAcc ), Ok ( json, val ) ) ->
@@ -516,7 +521,7 @@ children. It is, as such, fairly well behaved.
 
     """ [] """
         |> decodeString isObject
-    --> Errors <| Nonempty.fromElement <| Failure "Expected an object" (Encode.list [])
+    --> Errors <| Nonempty.fromElement <| Pure <| Failure "Expected an object" (Encode.list [])
 
 -}
 isObject : Decoder ()
@@ -541,13 +546,13 @@ array.
 
     """ [ "foo" ] """
         |> decodeString isArray
-    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (UnusedValue <|
+    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (Pure <| UnusedValue <|
             Encode.string "foo") [])) []) ()
 
 
     """ null """
         |> decodeString isArray
-    --> Errors <| Nonempty.fromElement <| Failure "Expected an array" Encode.null
+    --> Errors <| Nonempty.fromElement <| Pure <| Failure "Expected an array" Encode.null
 
 -}
 isArray : Decoder ()
@@ -572,7 +577,7 @@ isArray =
     """ [ "hello", "there" ] """
         |> decodeString (index 1 string)
     --> WithWarnings
-    -->   (Nonempty (AtIndex 0 <| Nonempty (UnusedValue (Encode.string "hello")) []) [])
+    -->   (Nonempty (AtIndex 0 <| Nonempty (Pure <| UnusedValue (Encode.string "hello")) []) [])
     -->   "there"
 
 -}
@@ -604,7 +609,7 @@ index idx (Decoder decoderFn) =
                     Err e ->
                         ( i - 1
                         , value :: acc
-                        , Just <| Err <| Nonempty.fromElement <| BadIndex i e
+                        , Just <| Err <| Nonempty.fromElement <| AtIndex i e
                         )
 
                     Ok ( updatedJson, res ) ->
@@ -650,13 +655,13 @@ keyValuePairs (Decoder decoderFn) =
         accumulate ( key, value ) acc =
             case ( acc, decoderFn value ) of
                 ( Err e, Err new ) ->
-                    Err <| Nonempty.cons (BadField key new) e
+                    Err <| Nonempty.cons (InField key new) e
 
                 ( Err e, _ ) ->
                     Err e
 
                 ( _, Err e ) ->
-                    Err <| Nonempty.fromElement (BadField key e)
+                    Err <| Nonempty.fromElement (InField key e)
 
                 ( Ok ( jsonAcc, resAcc ), Ok ( newJson, newRes ) ) ->
                     Ok
@@ -690,6 +695,7 @@ keyValuePairs (Decoder decoderFn) =
     expectedWarnings : Warnings
     expectedWarnings =
         UnusedValue (Encode.string "world")
+            |> Pure
             |> Nonempty.fromElement
             |> InField "hello"
             |> Nonempty.fromElement
@@ -709,7 +715,7 @@ field fieldName (Decoder decoderFn) =
                 case decoderFn value of
                     Err e ->
                         ( ( key, value ) :: acc
-                        , Just <| Err <| Nonempty.fromElement <| BadField key e
+                        , Just <| Err <| Nonempty.fromElement <| InField key e
                         )
 
                     Ok ( newValue, v ) ->
@@ -774,9 +780,9 @@ If all fail, the errors are collected into a `BadOneOf`.
 
     """ null """
         |> decodeString (oneOf [ string, map toString int ])
-    --> Errors <| Nonempty.fromElement <| BadOneOf
-    -->   [ Nonempty.fromElement <| Failure "Expected a string" Encode.null
-    -->   , Nonempty.fromElement <| Failure "Expected an integer number" Encode.null
+    --> Errors <| Nonempty.fromElement <| Pure <| BadOneOf
+    -->   [ Nonempty.fromElement <| Pure <| Failure "Expected a string" Encode.null
+    -->   , Nonempty.fromElement <| Pure <| Failure "Expected an integer number" Encode.null
     -->   ]
 
 -}
@@ -795,7 +801,10 @@ oneOfHelp :
 oneOfHelp decoders value errorAcc =
     case decoders of
         [] ->
-            Err <| Nonempty.fromElement <| BadOneOf (List.reverse errorAcc)
+            BadOneOf (List.reverse errorAcc)
+                |> Pure
+                |> Nonempty.fromElement
+                |> Err
 
         (Decoder decoderFn) :: rest ->
             case decoderFn value of
@@ -817,6 +826,7 @@ with `Nothing`.
     expectedWarnings : Warnings
     expectedWarnings =
         UnusedValue (Encode.int 12)
+            |> Pure
             |> Nonempty.fromElement
             |> AtIndex 1
             |> Nonempty.fromElement
@@ -1106,6 +1116,7 @@ expected : String -> AnnotatedValue -> Result Errors a
 expected expectedType json =
     encode json
         |> Failure ("Expected " ++ expectedType)
+        |> Pure
         |> Nonempty.fromElement
         |> Err
 
@@ -1153,26 +1164,26 @@ encode v =
                 |> Encode.object
 
 
-gatherWarnings : AnnotatedValue -> List Warning
+gatherWarnings : AnnotatedValue -> List (Located Warning)
 gatherWarnings json =
     case json of
         String False _ ->
-            [ UnusedValue <| encode json ]
+            [ Pure <| UnusedValue <| encode json ]
 
         Number False _ ->
-            [ UnusedValue <| encode json ]
+            [ Pure <| UnusedValue <| encode json ]
 
         Bool False _ ->
-            [ UnusedValue <| encode json ]
+            [ Pure <| UnusedValue <| encode json ]
 
         Null False ->
-            [ UnusedValue <| encode json ]
+            [ Pure <| UnusedValue <| encode json ]
 
         Array False _ ->
-            [ UnusedValue <| encode json ]
+            [ Pure <| UnusedValue <| encode json ]
 
         Object False _ ->
-            [ UnusedValue <| encode json ]
+            [ Pure <| UnusedValue <| encode json ]
 
         Array _ values ->
             values
