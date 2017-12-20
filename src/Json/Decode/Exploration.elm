@@ -4,7 +4,6 @@ module Json.Decode.Exploration
         , Decoder
         , Error(..)
         , Errors
-        , Located(..)
         , Value
         , Warning(..)
         , Warnings
@@ -42,6 +41,7 @@ module Json.Decode.Exploration
         , string
         , succeed
         , value
+        , warningsToString
         )
 
 {-| Like the regular decoders, except
@@ -49,6 +49,8 @@ module Json.Decode.Exploration
 Examples assume imports:
 
     import Json.Encode as Encode
+    import Json.Decode.Exploration exposing (..)
+    import Json.Decode.Exploration.Located exposing (Located(..))
     import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
     import Array
     import Dict
@@ -56,7 +58,12 @@ Examples assume imports:
 
 # Run Decoders
 
-@docs decodeString, decodeValue, DecodeResult, Value, Located, Errors, Error, Warnings, Warning
+@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning
+
+
+# Dealing with warnings and errors
+
+@docs warningsToString
 
 
 # Primitives
@@ -108,6 +115,7 @@ verify all the examples:
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Json.Decode as Decode
+import Json.Decode.Exploration.Located as Located exposing (Located(..))
 import Json.Encode as Encode
 import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
 
@@ -116,13 +124,6 @@ import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
 -}
 type alias Value =
     Decode.Value
-
-
-{-| -}
-type Located a
-    = InField String (Nonempty (Located a))
-    | AtIndex Int (Nonempty (Located a))
-    | Pure a
 
 
 {-| Decoding may fail with 1 or more errors, so `Errors` is a
@@ -1234,3 +1235,111 @@ markUsed annotatedValue =
 
         Object _ values ->
             Object True (List.map (Tuple.mapSecond markUsed) values)
+
+
+
+---
+
+
+strict : DecodeResult a -> Result Errors a
+strict res =
+    case res of
+        Errors e ->
+            Err e
+
+        BadJson ->
+            Err <| Nonempty.fromElement <| Pure <| Failure "Invalid JSON" Encode.null
+
+        WithWarnings w _ ->
+            Err <| warningsToErrors w
+
+        Success v ->
+            Ok v
+
+
+warningsToErrors : Warnings -> Errors
+warningsToErrors =
+    Nonempty.map (Located.map warningToError)
+
+
+warningToError : Warning -> Error
+warningToError (UnusedValue v) =
+    Failure "Unused value" v
+
+
+toResult : DecodeResult a -> Result String a
+toResult res =
+    case res of
+        Errors e ->
+            Err <| errorsToString e
+
+        BadJson ->
+            Err "This wasn't a valid JSON"
+
+        WithWarnings _ v ->
+            Ok v
+
+        Success v ->
+            Ok v
+
+
+strictResult : DecodeResult a -> Result String a
+strictResult res =
+    case res of
+        Errors e ->
+            Err <| errorsToString e
+
+        BadJson ->
+            Err "This wasn't a valid JSON"
+
+        WithWarnings w _ ->
+            Err <| warningsToString w
+
+        Success v ->
+            Ok v
+
+
+{-| -}
+warningsToString : Warnings -> String
+warningsToString warnings =
+    "While I was able to decode this JSON successfully, I did produce one or more warnings:"
+        :: Located.toString warningToString warnings
+        |> String.join "\n"
+
+
+warningToString : Warning -> List String
+warningToString (UnusedValue v) =
+    "I encountered an unused value here. Are you sure you don't need this?"
+        :: jsonLines v
+
+
+jsonLines : Value -> List String
+jsonLines =
+    Encode.encode 2 >> String.lines
+
+
+errorsToString : Errors -> String
+errorsToString errors =
+    "I encountered some erors while decoding this JSON:"
+        :: errorsToStrings errors
+        |> String.join "\n"
+
+
+errorsToStrings : Errors -> List String
+errorsToStrings errors =
+    Located.toString errorToString errors
+
+
+errorToString : Error -> List String
+errorToString error =
+    case error of
+        Failure e json ->
+            e :: jsonLines json
+
+        BadOneOf errors ->
+            case errors of
+                [] ->
+                    [ "I encountered a oneOf without any options" ]
+
+                _ ->
+                    "I encountered multiple issues" :: List.concatMap errorsToStrings errors

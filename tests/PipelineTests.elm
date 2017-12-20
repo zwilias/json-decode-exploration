@@ -2,6 +2,7 @@ module PipelineTests exposing (..)
 
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode exposing (..)
+import Json.Decode.Exploration.Located exposing (Located(..))
 import Json.Decode.Exploration.Pipeline exposing (..)
 import Json.Encode as Encode
 import List.Nonempty as Nonempty exposing (Nonempty(..))

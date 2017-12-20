@@ -7,10 +7,10 @@ import Json.Decode.Exploration as Decode
         , Decoder
         , Error(..)
         , Errors
-        , Located(..)
         , Warning(..)
         , Warnings
         )
+import Json.Decode.Exploration.Located exposing (Located(..))
 import Json.Encode as Encode
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import Native.TestHelpers

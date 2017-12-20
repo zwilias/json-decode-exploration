@@ -43,6 +43,7 @@ The examples all expect imports set up like this:
 
     import Json.Decode.Exploration exposing (..)
     import Json.Decode.Exploration.Pipeline exposing (..)
+    import Json.Decode.Exploration.Located exposing (Located(..))
     import Json.Encode as Encode
     import List.Nonempty as Nonempty
 
