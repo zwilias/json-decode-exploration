@@ -38,6 +38,7 @@ module Json.Decode.Exploration
         , null
         , nullable
         , oneOf
+        , strictResult
         , string
         , succeed
         , value
@@ -63,7 +64,7 @@ Examples assume imports:
 
 # Dealing with warnings and errors
 
-@docs warningsToString
+@docs strictResult, warningsToString
 
 
 # Primitives
@@ -1283,6 +1284,7 @@ toResult res =
             Ok v
 
 
+{-| -}
 strictResult : DecodeResult a -> Result String a
 strictResult res =
     case res of
@@ -1303,14 +1305,22 @@ strictResult res =
 warningsToString : Warnings -> String
 warningsToString warnings =
     "While I was able to decode this JSON successfully, I did produce one or more warnings:"
+        :: ""
         :: Located.toString warningToString warnings
+        |> List.map String.trimRight
         |> String.join "\n"
 
 
 warningToString : Warning -> List String
 warningToString (UnusedValue v) =
     "I encountered an unused value here. Are you sure you don't need this?"
-        :: jsonLines v
+        :: ""
+        :: (indent <| jsonLines v)
+
+
+indent : List String -> List String
+indent =
+    List.map ((++) "  ")
 
 
 jsonLines : Value -> List String
@@ -1321,6 +1331,7 @@ jsonLines =
 errorsToString : Errors -> String
 errorsToString errors =
     "I encountered some erors while decoding this JSON:"
+        :: ""
         :: errorsToStrings errors
         |> String.join "\n"
 
@@ -1342,4 +1353,6 @@ errorToString error =
                     [ "I encountered a oneOf without any options" ]
 
                 _ ->
-                    "I encountered multiple issues" :: List.concatMap errorsToStrings errors
+                    "I encountered multiple issues"
+                        :: ""
+                        :: List.concatMap errorsToStrings errors

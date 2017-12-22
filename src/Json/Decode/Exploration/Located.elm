@@ -15,7 +15,7 @@ toString itemToString locatedItems =
     locatedItems
         |> gather ""
         |> List.map (uncurry <| render itemToString)
-        |> intercalate "And also"
+        |> intercalate ""
 
 
 intercalate : a -> List (List a) -> List a
@@ -25,9 +25,16 @@ intercalate sep lists =
 
 render : (a -> List String) -> String -> List a -> List String
 render itemToString path errors =
-    List.concatMap itemToString errors
-        |> List.map indent
-        |> (::) ("At path " ++ path)
+    let
+        formattedErrors : List String
+        formattedErrors =
+            List.concatMap itemToString errors
+                |> List.map indent
+    in
+    if String.isEmpty path then
+        formattedErrors
+    else
+        ("At path " ++ path) :: "" :: formattedErrors
 
 
 indent : String -> String
