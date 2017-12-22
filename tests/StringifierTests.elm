@@ -17,7 +17,7 @@ simpleWarning =
             let
                 expectedError =
                     formatWarning """
-  I encountered an unused value here. Are you sure you don't need this?
+  Unused value:
 
     []
 """
@@ -35,13 +35,13 @@ multipleWarnings =
             formatWarning """
 At path /foo
 
-  I encountered an unused value here. Are you sure you don't need this?
+  Unused value:
 
     "bar"
 
 At path /baz
 
-  I encountered an unused value here. Are you sure you don't need this?
+  Unused value:
 
     "klux"
 """
@@ -50,5 +50,37 @@ At path /baz
         \_ ->
             """ { "foo": "bar", "baz": "klux" } """
                 |> decodeString isObject
+                |> strictResult
+                |> Expect.equal (Err expectedError)
+
+
+nestedWarnings : Test
+nestedWarnings =
+    let
+        expectedError =
+            formatWarning """
+At path /root/0
+
+  Unused value:
+
+    "foo"
+
+At path /root/1
+
+  Unused value:
+
+    "bar"
+"""
+    in
+    test "nested warnings" <|
+        \_ ->
+            """
+             { "root":
+               [ "foo"
+               , "bar"
+               ]
+             }
+             """
+                |> decodeString (field "root" isArray)
                 |> strictResult
                 |> Expect.equal (Err expectedError)

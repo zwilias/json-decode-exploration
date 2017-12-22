@@ -1313,7 +1313,7 @@ warningsToString warnings =
 
 warningToString : Warning -> List String
 warningToString (UnusedValue v) =
-    "I encountered an unused value here. Are you sure you don't need this?"
+    "Unused value:"
         :: ""
         :: (indent <| jsonLines v)
 

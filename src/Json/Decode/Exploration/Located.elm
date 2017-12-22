@@ -58,33 +58,7 @@ flatten located =
 gather : String -> Nonempty (Located a) -> List ( String, List a )
 gather prefix (Nonempty first rest) =
     List.concatMap flatten (first :: rest)
-        |> group
         |> List.map (Tuple.mapFirst ((++) prefix))
-
-
-group : List ( String, List a ) -> List ( String, List a )
-group =
-    List.foldr
-        (\( key, item ) { keys, items } ->
-            if Set.member key keys then
-                { keys = keys
-                , items =
-                    List.map
-                        (\( k, v ) ->
-                            if k == key then
-                                ( k, item ++ v )
-                            else
-                                ( k, v )
-                        )
-                        items
-                }
-            else
-                { keys = Set.insert key keys
-                , items = ( key, item ) :: items
-                }
-        )
-        { keys = Set.empty, items = [] }
-        >> .items
 
 
 map : (a -> b) -> Located a -> Located b
