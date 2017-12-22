@@ -16,6 +16,7 @@ module Json.Decode.Exploration
         , decodeString
         , decodeValue
         , dict
+        , errorsToString
         , fail
         , field
         , float
@@ -38,7 +39,7 @@ module Json.Decode.Exploration
         , null
         , nullable
         , oneOf
-        , strictResult
+        , strict
         , string
         , succeed
         , value
@@ -64,7 +65,7 @@ Examples assume imports:
 
 # Dealing with warnings and errors
 
-@docs strictResult, warningsToString
+@docs strict, errorsToString, warningsToString
 
 
 # Primitives
@@ -1242,6 +1243,16 @@ markUsed annotatedValue =
 ---
 
 
+{-| Interpret a decode result in a strict way, lifting warnings to errors.
+
+    """ ["foo"] """
+        |> decodeString isArray
+        |> strict
+    --> (Pure <| Failure "Unused value" (Encode.string "foo"))
+    -->   |> (AtIndex 0 << Nonempty.fromElement)
+    -->   |> (Err << Nonempty.fromElement)
+
+-}
 strict : DecodeResult a -> Result Errors a
 strict res =
     case res of
@@ -1268,40 +1279,8 @@ warningToError (UnusedValue v) =
     Failure "Unused value" v
 
 
-toResult : DecodeResult a -> Result String a
-toResult res =
-    case res of
-        Errors e ->
-            Err <| errorsToString e
-
-        BadJson ->
-            Err "This wasn't a valid JSON"
-
-        WithWarnings _ v ->
-            Ok v
-
-        Success v ->
-            Ok v
-
-
-{-| -}
-strictResult : DecodeResult a -> Result String a
-strictResult res =
-    case res of
-        Errors e ->
-            Err <| errorsToString e
-
-        BadJson ->
-            Err "This wasn't a valid JSON"
-
-        WithWarnings w _ ->
-            Err <| warningsToString w
-
-        Success v ->
-            Ok v
-
-
-{-| -}
+{-| Stringifies warnings to a human readable string.
+-}
 warningsToString : Warnings -> String
 warningsToString warnings =
     "While I was able to decode this JSON successfully, I did produce one or more warnings:"
@@ -1328,6 +1307,8 @@ jsonLines =
     Encode.encode 2 >> String.lines
 
 
+{-| Stringifies errors to a human readable string.
+-}
 errorsToString : Errors -> String
 errorsToString errors =
     "I encountered some erors while decoding this JSON:"

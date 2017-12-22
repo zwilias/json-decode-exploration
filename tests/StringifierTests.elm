@@ -5,6 +5,16 @@ import Json.Decode.Exploration exposing (..)
 import Test exposing (..)
 
 
+warnings : DecodeResult a -> Maybe Warnings
+warnings res =
+    case res of
+        WithWarnings w _ ->
+            Just w
+
+        _ ->
+            Nothing
+
+
 formatWarning : String -> String
 formatWarning =
     (++) "While I was able to decode this JSON successfully, I did produce one or more warnings:\n" >> String.trim
@@ -15,7 +25,7 @@ simpleWarning =
     test "simple warning" <|
         \_ ->
             let
-                expectedError =
+                expectedWarning =
                     formatWarning """
   Unused value:
 
@@ -24,14 +34,15 @@ simpleWarning =
             in
             """ [] """
                 |> decodeString (succeed "hi")
-                |> strictResult
-                |> Expect.equal (Err expectedError)
+                |> warnings
+                |> Maybe.map warningsToString
+                |> Expect.equal (Just expectedWarning)
 
 
 multipleWarnings : Test
 multipleWarnings =
     let
-        expectedError =
+        expectedWarning =
             formatWarning """
 At path /foo
 
@@ -50,14 +61,15 @@ At path /baz
         \_ ->
             """ { "foo": "bar", "baz": "klux" } """
                 |> decodeString isObject
-                |> strictResult
-                |> Expect.equal (Err expectedError)
+                |> warnings
+                |> Maybe.map warningsToString
+                |> Expect.equal (Just expectedWarning)
 
 
 nestedWarnings : Test
 nestedWarnings =
     let
-        expectedError =
+        expectedWarning =
             formatWarning """
 At path /root/0
 
@@ -82,5 +94,6 @@ At path /root/1
              }
              """
                 |> decodeString (field "root" isArray)
-                |> strictResult
-                |> Expect.equal (Err expectedError)
+                |> warnings
+                |> Maybe.map warningsToString
+                |> Expect.equal (Just expectedWarning)
