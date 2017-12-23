@@ -1269,6 +1269,35 @@ markUsed annotatedValue =
     -->   |> (AtIndex 0 << Nonempty.fromElement)
     -->   |> (Err << Nonempty.fromElement)
 
+
+    """ null """
+        |> decodeString (null "cool")
+        |> strict
+    --> Ok "cool"
+
+    """ { "foo": "bar" } """
+        |> decodeString isObject
+        |> strict
+    --> (Pure <| Failure "Unused value" (Just <| Encode.string "bar"))
+    -->   |> (InField "foo" << Nonempty.fromElement)
+    -->   |> (Err << Nonempty.fromElement)
+
+Bad JSON will also result in a `Failure`, with `Nothing` as the actual value:
+
+    """ foobar """
+        |> decodeString string
+        |> strict
+    --> (Pure <| Failure "Invalid JSON" Nothing)
+    -->   |> (Err << Nonempty.fromElement)
+
+Errors will still be errors, of course.
+
+    """ null """
+        |> decodeString string
+        |> strict
+    --> (Pure <| Expected TString Encode.null)
+    -->   |> (Err << Nonempty.fromElement)
+
 -}
 strict : DecodeResult a -> Result Errors a
 strict res =
@@ -1364,12 +1393,19 @@ errorToString error =
         BadOneOf errors ->
             case errors of
                 [] ->
-                    [ "I encountered a oneOf without any options" ]
+                    [ "I encountered a `oneOf` without any options." ]
 
                 _ ->
-                    "I encountered multiple issues"
+                    "I encountered multiple issues:"
                         :: ""
-                        :: List.concatMap errorsToStrings errors
+                        :: intercalateMap "" errorsToStrings errors
+
+
+intercalateMap : b -> (a -> List b) -> List a -> List b
+intercalateMap sep toList xs =
+    List.map toList xs
+        |> List.intersperse [ sep ]
+        |> List.concat
 
 
 expectedTypeToString : ExpectedType -> String
@@ -1400,4 +1436,4 @@ expectedTypeToString expected =
             "an array with index " ++ toString idx
 
         TObjectField field ->
-            "an object with a field '" ++ toString field ++ "'"
+            "an object with a field '" ++ field ++ "'"
