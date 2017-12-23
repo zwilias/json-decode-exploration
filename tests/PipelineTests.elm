@@ -2,6 +2,7 @@ module PipelineTests exposing (..)
 
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode exposing (..)
+import Json.Decode.Exploration.Located exposing (Located(..))
 import Json.Decode.Exploration.Pipeline exposing (..)
 import Json.Encode as Encode
 import List.Nonempty as Nonempty exposing (Nonempty(..))
@@ -37,9 +38,10 @@ optionalEmptyStructure =
 optionalUnusedField : Test
 optionalUnusedField =
     let
-        expectedWarnings : Nonempty Warning
+        expectedWarnings : Warnings
         expectedWarnings =
             UnusedValue (Encode.int 1)
+                |> Pure
                 |> Nonempty.fromElement
                 |> InField "a"
                 |> Nonempty.fromElement
@@ -57,19 +59,20 @@ optionalWrongStructure =
         \_ ->
             """ [] """
                 |> decodeString (decode identity |> optional "foo" string "hi")
-                |> Expect.equal (Errors (Nonempty (Failure "Expected an object" (Encode.list [])) []))
+                |> Expect.equal (Errors (Nonempty (Pure <| Expected TObject (Encode.list [])) []))
 
 
 optionalAtWrongStructure : Test
 optionalAtWrongStructure =
     let
-        expectedErrors : Nonempty Error
+        expectedErrors : Errors
         expectedErrors =
-            Failure "Expected an object" (Encode.list [])
+            Expected TObject (Encode.list [])
+                |> Pure
                 |> Nonempty.fromElement
-                |> BadField "b"
+                |> InField "b"
                 |> Nonempty.fromElement
-                |> BadField "a"
+                |> InField "a"
                 |> Nonempty.fromElement
     in
     test "Using optionalAt where a field on the path is of an unexpected type fails" <|

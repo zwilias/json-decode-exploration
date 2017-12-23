@@ -8,6 +8,7 @@
     ],
     "exposed-modules": [
         "Json.Decode.Exploration",
+        "Json.Decode.Exploration.Located",
         "Json.Decode.Exploration.Pipeline"
     ],
     "dependencies": {

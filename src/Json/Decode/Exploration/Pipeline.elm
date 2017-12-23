@@ -43,6 +43,7 @@ The examples all expect imports set up like this:
 
     import Json.Decode.Exploration exposing (..)
     import Json.Decode.Exploration.Pipeline exposing (..)
+    import Json.Decode.Exploration.Located exposing (Located(..))
     import Json.Encode as Encode
     import List.Nonempty as Nonempty
 
@@ -256,9 +257,10 @@ the decoder to succeed.
 
     expectedErrors : Errors
     expectedErrors =
-        Failure "Verification failed, expected 'True'."  (Encode.bool False)
+        Failure "Verification failed, expected 'True'."  (Just <| Encode.bool False)
+            |> Pure
             |> Nonempty.fromElement
-            |> BadField "enabled"
+            |> InField "enabled"
             |> Nonempty.fromElement
 
 -}

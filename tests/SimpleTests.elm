@@ -1,7 +1,17 @@
 module SimpleTests exposing (..)
 
 import Expect exposing (Expectation)
-import Json.Decode.Exploration as Decode exposing (Decoder)
+import Json.Decode.Exploration as Decode
+    exposing
+        ( DecodeResult(..)
+        , Decoder
+        , Error(..)
+        , Errors
+        , ExpectedType(..)
+        , Warning(..)
+        , Warnings
+        )
+import Json.Decode.Exploration.Located exposing (Located(..))
 import Json.Encode as Encode
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import Native.TestHelpers
@@ -25,15 +35,15 @@ unusedSimpleValues =
 unusedValueTest : Encode.Value -> Test
 unusedValueTest value =
     let
-        warnings : Decode.Warnings
+        warnings : Warnings
         warnings =
-            Nonempty (Decode.UnusedValue value) []
+            Nonempty (Pure <| UnusedValue value) []
     in
     test (Encode.encode 0 value) <|
         \_ ->
             value
                 |> Decode.decodeValue (Decode.succeed ())
-                |> Expect.equal (Decode.WithWarnings warnings ())
+                |> Expect.equal (WithWarnings warnings ())
 
 
 simpleUnexpectedTypes : Test
@@ -43,36 +53,36 @@ simpleUnexpectedTypes =
         neutralize =
             Decode.map (always ())
     in
-    [ ( Encode.string "foo", neutralize Decode.int, "Expected an integer number" )
-    , ( Encode.string "foo", neutralize Decode.float, "Expected a number" )
-    , ( Encode.string "foo", Decode.null (), "Expected null" )
-    , ( Encode.int 12, neutralize Decode.string, "Expected a string" )
-    , ( Encode.string "foo", neutralize Decode.bool, "Expected a boolean" )
-    , ( Encode.string "foo", neutralize (Decode.list Decode.bool), "Expected an array" )
-    , ( Encode.string "bar", Decode.index 0 (Decode.succeed ()), "Expected an array" )
-    , ( Encode.list [], Decode.index 0 (Decode.succeed ()), "Expected an array with index 0" )
-    , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), "Expected an object" )
-    , ( Encode.string "bar", Decode.field "foo" (Decode.succeed ()), "Expected an object" )
-    , ( Encode.object [], Decode.field "foo" (Decode.succeed ()), "Expected an object with a field 'foo'" )
+    [ ( Encode.string "foo", neutralize Decode.int, TInt )
+    , ( Encode.string "foo", neutralize Decode.float, TNumber )
+    , ( Encode.string "foo", Decode.null (), TNull )
+    , ( Encode.int 12, neutralize Decode.string, TString )
+    , ( Encode.string "foo", neutralize Decode.bool, TBool )
+    , ( Encode.string "foo", neutralize (Decode.list Decode.bool), TArray )
+    , ( Encode.string "bar", Decode.index 0 (Decode.succeed ()), TArray )
+    , ( Encode.list [], Decode.index 0 (Decode.succeed ()), TArrayIndex 0 )
+    , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), TObject )
+    , ( Encode.string "bar", Decode.field "foo" (Decode.succeed ()), TObject )
+    , ( Encode.object [], Decode.field "foo" (Decode.succeed ()), TObjectField "foo" )
     ]
         |> List.map (\( val, decoder, expected ) -> simpleUnexpectedType val decoder expected)
         |> describe "Unexpected types, without nesting"
 
 
-simpleUnexpectedType : Encode.Value -> Decoder () -> String -> Test
+simpleUnexpectedType : Encode.Value -> Decoder () -> ExpectedType -> Test
 simpleUnexpectedType value decoder expected =
     let
-        expectedErrors : Decode.Errors
+        expectedErrors : Errors
         expectedErrors =
             Nonempty
-                (Decode.Failure expected value)
+                (Pure <| Expected expected value)
                 []
     in
-    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ expected) <|
+    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ toString expected) <|
         \_ ->
             value
                 |> Decode.decodeValue decoder
-                |> Expect.equal (Decode.Errors expectedErrors)
+                |> Expect.equal (Errors expectedErrors)
 
 
 
@@ -104,7 +114,7 @@ simpleRecursiveTest =
         """
                 |> Decode.decodeString treeDecoder
                 |> Expect.equal
-                    (Decode.Success
+                    (Success
                         (Branch
                             [ Leaf "1"
                             , Branch [ Leaf "2", Leaf "3" ]
@@ -132,7 +142,7 @@ map2Test =
         \_ ->
             """ [ 1, 2 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 3)
+                |> Expect.equal (Success 3)
 
 
 map3Test : Test
@@ -150,7 +160,7 @@ map3Test =
         \_ ->
             """ [ 1, 2, 3 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 6)
+                |> Expect.equal (Success 6)
 
 
 map4Test : Test
@@ -169,7 +179,7 @@ map4Test =
         \_ ->
             """ [ 1, 2, 3, 4 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 10)
+                |> Expect.equal (Success 10)
 
 
 map5Test : Test
@@ -189,7 +199,7 @@ map5Test =
         \_ ->
             """ [ 1, 2, 3, 4, 5 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 15)
+                |> Expect.equal (Success 15)
 
 
 map6Test : Test
@@ -210,7 +220,7 @@ map6Test =
         \_ ->
             """ [ 1, 2, 3, 4, 5, 6 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 21)
+                |> Expect.equal (Success 21)
 
 
 map7Test : Test
@@ -232,7 +242,7 @@ map7Test =
         \_ ->
             """ [ 1, 2, 3, 4, 5, 6, 7 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 28)
+                |> Expect.equal (Success 28)
 
 
 map8Test : Test
@@ -255,7 +265,7 @@ map8Test =
         \_ ->
             """ [ 1, 2, 3, 4, 5, 6, 7, 8 ] """
                 |> Decode.decodeString decoder
-                |> Expect.equal (Decode.Success 36)
+                |> Expect.equal (Success 36)
 
 
 
@@ -277,7 +287,7 @@ noUnusedValuesWithValueHelper value =
         \_ ->
             value
                 |> Decode.decodeValue (Decode.map (always ()) Decode.value)
-                |> Expect.equal (Decode.Success ())
+                |> Expect.equal (Success ())
 
 
 
@@ -290,7 +300,7 @@ functionInValueIsBad =
         \_ ->
             Native.TestHelpers.jsonWithFunction
                 |> Decode.decodeValue Decode.value
-                |> Expect.equal Decode.BadJson
+                |> Expect.equal BadJson
 
 
 
@@ -300,14 +310,14 @@ functionInValueIsBad =
 listCollectsErrors : Test
 listCollectsErrors =
     let
-        badIndex : Int -> Decode.Error
+        badIndex : Int -> Located Error
         badIndex idx =
-            Decode.BadIndex idx <|
+            AtIndex idx <|
                 Nonempty
-                    (Decode.Failure "Expected a string" (Encode.int idx))
+                    (Pure <| Expected TString (Encode.int idx))
                     []
 
-        expectedErrors : Decode.Errors
+        expectedErrors : Errors
         expectedErrors =
             Nonempty (badIndex 0) [ badIndex 1 ]
     in
@@ -315,20 +325,20 @@ listCollectsErrors =
         \_ ->
             """ [ 0, 1 ] """
                 |> Decode.decodeString (Decode.list Decode.string)
-                |> Expect.equal (Decode.Errors expectedErrors)
+                |> Expect.equal (Errors expectedErrors)
 
 
 indexPropagatesErrors : Test
 indexPropagatesErrors =
     let
-        badIndex : Int -> Decode.Error
+        badIndex : Int -> Located Error
         badIndex idx =
-            Decode.BadIndex idx <|
+            AtIndex idx <|
                 Nonempty
-                    (Decode.Failure "Expected a string" (Encode.int idx))
+                    (Pure <| Expected TString (Encode.int idx))
                     []
 
-        expectedErrors : Decode.Errors
+        expectedErrors : Errors
         expectedErrors =
             Nonempty (badIndex 0) []
     in
@@ -336,20 +346,20 @@ indexPropagatesErrors =
         \_ ->
             """ [ 0, 1 ] """
                 |> Decode.decodeString (Decode.index 0 Decode.string)
-                |> Expect.equal (Decode.Errors expectedErrors)
+                |> Expect.equal (Errors expectedErrors)
 
 
 keyValuePairsCollectsErrors : Test
 keyValuePairsCollectsErrors =
     let
-        badField : String -> Decode.Error
+        badField : String -> Located Error
         badField field =
-            Decode.BadField field <|
+            InField field <|
                 Nonempty
-                    (Decode.Failure "Expected a string" Encode.null)
+                    (Pure <| Expected TString Encode.null)
                     []
 
-        expectedErrors : Decode.Errors
+        expectedErrors : Errors
         expectedErrors =
             Nonempty (badField "foo") [ badField "bar" ]
     in
@@ -357,7 +367,7 @@ keyValuePairsCollectsErrors =
         \_ ->
             """ { "foo": null, "hello": "world", "bar": null } """
                 |> Decode.decodeString (Decode.keyValuePairs Decode.string)
-                |> Expect.equal (Decode.Errors expectedErrors)
+                |> Expect.equal (Errors expectedErrors)
 
 
 
@@ -367,23 +377,23 @@ keyValuePairsCollectsErrors =
 map2CombineErrors : Test
 map2CombineErrors =
     let
-        badIndex : Int -> Decode.Error
+        badIndex : Int -> Located Error
         badIndex idx =
-            Decode.BadIndex idx <|
+            AtIndex idx <|
                 Nonempty
-                    (Decode.Failure "Expected an integer number" Encode.null)
+                    (Pure <| Expected TInt Encode.null)
                     []
     in
-    [ ( """ [ null, null ] """, Decode.Errors <| Nonempty (badIndex 0) [ badIndex 1 ] )
-    , ( """ [ 1, null ] """, Decode.Errors <| Nonempty (badIndex 1) [] )
-    , ( """ [ null, 1 ] """, Decode.Errors <| Nonempty (badIndex 0) [] )
-    , ( """ [ 1, 2] """, Decode.Success 3 )
+    [ ( """ [ null, null ] """, Errors <| Nonempty (badIndex 0) [ badIndex 1 ] )
+    , ( """ [ 1, null ] """, Errors <| Nonempty (badIndex 1) [] )
+    , ( """ [ null, 1 ] """, Errors <| Nonempty (badIndex 0) [] )
+    , ( """ [ 1, 2] """, Success 3 )
     ]
         |> List.map (uncurry map2CombineErrorsCase)
         |> describe "map2 combines errors"
 
 
-map2CombineErrorsCase : String -> Decode.DecodeResult Int -> Test
+map2CombineErrorsCase : String -> DecodeResult Int -> Test
 map2CombineErrorsCase input expected =
     test input <|
         \_ ->
@@ -410,9 +420,9 @@ andThenPreservesErrors =
             "null"
                 |> Decode.decodeString decoder
                 |> Expect.equal
-                    (Decode.Errors <|
+                    (Errors <|
                         Nonempty
-                            (Decode.Failure "Expected a string" Encode.null)
+                            (Pure <| Expected TString Encode.null)
                             []
                     )
 
@@ -420,15 +430,16 @@ andThenPreservesErrors =
 decodingAFieldDoesNotMarkTheOthersAsUsed : Test
 decodingAFieldDoesNotMarkTheOthersAsUsed =
     let
-        expectedWarnings : Nonempty Decode.Warning
+        expectedWarnings : Warnings
         expectedWarnings =
-            Decode.UnusedValue Encode.null
+            UnusedValue Encode.null
+                |> Pure
                 |> Nonempty.fromElement
-                |> Decode.InField "baz"
+                |> InField "baz"
                 |> Nonempty.fromElement
     in
     test "Decoding a single field generates unused warnings for the other fields" <|
         \_ ->
             """ { "foo": "bar", "baz": null } """
                 |> Decode.decodeString (Decode.field "foo" Decode.string)
-                |> Expect.equal (Decode.WithWarnings expectedWarnings "bar")
+                |> Expect.equal (WithWarnings expectedWarnings "bar")
