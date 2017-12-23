@@ -59,7 +59,7 @@ optionalWrongStructure =
         \_ ->
             """ [] """
                 |> decodeString (decode identity |> optional "foo" string "hi")
-                |> Expect.equal (Errors (Nonempty (Pure <| Failure "Expected an object" (Encode.list [])) []))
+                |> Expect.equal (Errors (Nonempty (Pure <| Expected TObject (Encode.list [])) []))
 
 
 optionalAtWrongStructure : Test
@@ -67,7 +67,7 @@ optionalAtWrongStructure =
     let
         expectedErrors : Errors
         expectedErrors =
-            Failure "Expected an object" (Encode.list [])
+            Expected TObject (Encode.list [])
                 |> Pure
                 |> Nonempty.fromElement
                 |> InField "b"

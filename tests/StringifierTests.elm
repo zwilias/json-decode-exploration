@@ -5,11 +5,11 @@ import Json.Decode.Exploration exposing (..)
 import Test exposing (..)
 
 
-warnings : DecodeResult a -> Maybe Warnings
+warnings : DecodeResult a -> Maybe String
 warnings res =
     case res of
         WithWarnings w _ ->
-            Just w
+            Just <| warningsToString w
 
         _ ->
             Nothing
@@ -35,7 +35,6 @@ simpleWarning =
             """ [] """
                 |> decodeString (succeed "hi")
                 |> warnings
-                |> Maybe.map warningsToString
                 |> Expect.equal (Just expectedWarning)
 
 
@@ -62,7 +61,6 @@ At path /baz
             """ { "foo": "bar", "baz": "klux" } """
                 |> decodeString isObject
                 |> warnings
-                |> Maybe.map warningsToString
                 |> Expect.equal (Just expectedWarning)
 
 
@@ -95,5 +93,37 @@ At path /root/1
              """
                 |> decodeString (field "root" isArray)
                 |> warnings
-                |> Maybe.map warningsToString
                 |> Expect.equal (Just expectedWarning)
+
+
+errors : DecodeResult a -> Maybe String
+errors res =
+    case res of
+        Errors e ->
+            Just <| errorsToString e
+
+        _ ->
+            Nothing
+
+
+formatError : String -> String
+formatError =
+    (++) "I encountered some errors while decoding this JSON:\n" >> String.trim
+
+
+simpleError : Test
+simpleError =
+    let
+        expectedErrors =
+            formatError """
+  I expected a string here, but instead found this value:
+
+    {}
+"""
+    in
+    test "simple error" <|
+        \_ ->
+            """ {} """
+                |> decodeString string
+                |> errors
+                |> Expect.equal (Just expectedErrors)

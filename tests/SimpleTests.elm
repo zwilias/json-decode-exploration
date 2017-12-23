@@ -7,6 +7,7 @@ import Json.Decode.Exploration as Decode
         , Decoder
         , Error(..)
         , Errors
+        , ExpectedType(..)
         , Warning(..)
         , Warnings
         )
@@ -52,32 +53,32 @@ simpleUnexpectedTypes =
         neutralize =
             Decode.map (always ())
     in
-    [ ( Encode.string "foo", neutralize Decode.int, "Expected an integer number" )
-    , ( Encode.string "foo", neutralize Decode.float, "Expected a number" )
-    , ( Encode.string "foo", Decode.null (), "Expected null" )
-    , ( Encode.int 12, neutralize Decode.string, "Expected a string" )
-    , ( Encode.string "foo", neutralize Decode.bool, "Expected a boolean" )
-    , ( Encode.string "foo", neutralize (Decode.list Decode.bool), "Expected an array" )
-    , ( Encode.string "bar", Decode.index 0 (Decode.succeed ()), "Expected an array" )
-    , ( Encode.list [], Decode.index 0 (Decode.succeed ()), "Expected an array with index 0" )
-    , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), "Expected an object" )
-    , ( Encode.string "bar", Decode.field "foo" (Decode.succeed ()), "Expected an object" )
-    , ( Encode.object [], Decode.field "foo" (Decode.succeed ()), "Expected an object with a field 'foo'" )
+    [ ( Encode.string "foo", neutralize Decode.int, TInt )
+    , ( Encode.string "foo", neutralize Decode.float, TNumber )
+    , ( Encode.string "foo", Decode.null (), TNull )
+    , ( Encode.int 12, neutralize Decode.string, TString )
+    , ( Encode.string "foo", neutralize Decode.bool, TBool )
+    , ( Encode.string "foo", neutralize (Decode.list Decode.bool), TArray )
+    , ( Encode.string "bar", Decode.index 0 (Decode.succeed ()), TArray )
+    , ( Encode.list [], Decode.index 0 (Decode.succeed ()), TArrayIndex 0 )
+    , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), TObject )
+    , ( Encode.string "bar", Decode.field "foo" (Decode.succeed ()), TObject )
+    , ( Encode.object [], Decode.field "foo" (Decode.succeed ()), TObjectField "foo" )
     ]
         |> List.map (\( val, decoder, expected ) -> simpleUnexpectedType val decoder expected)
         |> describe "Unexpected types, without nesting"
 
 
-simpleUnexpectedType : Encode.Value -> Decoder () -> String -> Test
+simpleUnexpectedType : Encode.Value -> Decoder () -> ExpectedType -> Test
 simpleUnexpectedType value decoder expected =
     let
         expectedErrors : Errors
         expectedErrors =
             Nonempty
-                (Pure <| Failure expected value)
+                (Pure <| Expected expected value)
                 []
     in
-    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ expected) <|
+    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ toString expected) <|
         \_ ->
             value
                 |> Decode.decodeValue decoder
@@ -313,7 +314,7 @@ listCollectsErrors =
         badIndex idx =
             AtIndex idx <|
                 Nonempty
-                    (Pure <| Failure "Expected a string" (Encode.int idx))
+                    (Pure <| Expected TString (Encode.int idx))
                     []
 
         expectedErrors : Errors
@@ -334,7 +335,7 @@ indexPropagatesErrors =
         badIndex idx =
             AtIndex idx <|
                 Nonempty
-                    (Pure <| Failure "Expected a string" (Encode.int idx))
+                    (Pure <| Expected TString (Encode.int idx))
                     []
 
         expectedErrors : Errors
@@ -355,7 +356,7 @@ keyValuePairsCollectsErrors =
         badField field =
             InField field <|
                 Nonempty
-                    (Pure <| Failure "Expected a string" Encode.null)
+                    (Pure <| Expected TString Encode.null)
                     []
 
         expectedErrors : Errors
@@ -380,7 +381,7 @@ map2CombineErrors =
         badIndex idx =
             AtIndex idx <|
                 Nonempty
-                    (Pure <| Failure "Expected an integer number" Encode.null)
+                    (Pure <| Expected TInt Encode.null)
                     []
     in
     [ ( """ [ null, null ] """, Errors <| Nonempty (badIndex 0) [ badIndex 1 ] )
@@ -421,7 +422,7 @@ andThenPreservesErrors =
                 |> Expect.equal
                     (Errors <|
                         Nonempty
-                            (Pure <| Failure "Expected a string" Encode.null)
+                            (Pure <| Expected TString Encode.null)
                             []
                     )
 

@@ -4,6 +4,7 @@ module Json.Decode.Exploration
         , Decoder
         , Error(..)
         , Errors
+        , ExpectedType(..)
         , Value
         , Warning(..)
         , Warnings
@@ -60,7 +61,7 @@ Examples assume imports:
 
 # Run Decoders
 
-@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning
+@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning, ExpectedType
 
 
 # Dealing with warnings and errors
@@ -147,7 +148,22 @@ The other cases describe the "path" to where the error occurred.
 -}
 type Error
     = BadOneOf (List Errors)
-    | Failure String Value
+    | Expected ExpectedType Value
+    | Failure String (Maybe Value)
+
+
+{-| An enumeration of the different types that could be expected by a decoder.
+-}
+type ExpectedType
+    = TString
+    | TBool
+    | TInt
+    | TNumber
+    | TArray
+    | TObject
+    | TArrayIndex Int
+    | TObjectField String
+    | TNull
 
 
 {-| Decoding may generate warnings. In case the result is a `WithWarnings`, you
@@ -262,7 +278,7 @@ succeed val =
 
     """ "hello" """
         |> decodeString (fail "failure")
-    --> Errors (Nonempty (Pure <| Failure "failure" (Encode.string "hello")) [])
+    --> Errors (Nonempty (Pure <| Failure "failure" (Just <| Encode.string "hello")) [])
 
 -}
 fail : String -> Decoder a
@@ -270,6 +286,7 @@ fail message =
     Decoder <|
         \json ->
             encode json
+                |> Just
                 |> Failure message
                 |> Pure
                 |> Nonempty.fromElement
@@ -285,7 +302,7 @@ fail message =
 
     """ 123 """
         |> decodeString string
-    --> Errors (Nonempty (Pure <| Failure "Expected a string" (Encode.int 123)) [])
+    --> Errors (Nonempty (Pure <| Expected TString (Encode.int 123)) [])
 
 -}
 string : Decoder String
@@ -297,7 +314,7 @@ string =
                     Ok ( markUsed json, value )
 
                 _ ->
-                    expected "a string" json
+                    expected TString json
 
 
 {-| Extract a piece without actually decoding it.
@@ -331,7 +348,7 @@ value =
 
     """ null """
         |> decodeString float
-    --> Errors (Nonempty (Pure <| Failure "Expected a number" Encode.null) [])
+    --> Errors (Nonempty (Pure <| Expected TNumber Encode.null) [])
 
 -}
 float : Decoder Float
@@ -343,7 +360,7 @@ float =
                     Ok ( markUsed json, value )
 
                 _ ->
-                    expected "a number" json
+                    expected TNumber json
 
 
 {-| Decode a number into an `Int`.
@@ -357,7 +374,7 @@ float =
         |> decodeString int
     --> Errors <|
     -->   Nonempty
-    -->     (Pure <| Failure "Expected an integer number" (Encode.float 0.1))
+    -->     (Pure <| Expected TInt (Encode.float 0.1))
     -->     []
 
 -}
@@ -370,10 +387,10 @@ int =
                     if toFloat (round value) == value then
                         Ok ( markUsed json, round value )
                     else
-                        expected "an integer number" json
+                        expected TInt json
 
                 _ ->
-                    expected "an integer number" json
+                    expected TInt json
 
 
 {-| Decode a boolean value.
@@ -392,7 +409,7 @@ bool =
                     Ok ( markUsed json, value )
 
                 _ ->
-                    expected "a boolean" json
+                    expected TBool json
 
 
 {-| Decode a `null` and succeed with some value.
@@ -413,7 +430,7 @@ verify that a field is _missing_, only that it is explicitly set to `null`.
         |> decodeString (field "foo" (null ()))
     --> Errors <|
     -->   Nonempty
-    -->     (Pure <| Failure "Expected an object with a field 'foo'" (Encode.object []))
+    -->     (Pure <| Expected (TObjectField "foo") (Encode.object []))
     -->     []
 
 -}
@@ -426,7 +443,7 @@ null val =
                     Ok ( Null True, val )
 
                 _ ->
-                    expected "null" json
+                    expected TNull json
 
 
 {-| Decode a list of values, decoding each entry with the provided decoder.
@@ -441,7 +458,7 @@ null val =
     --> Errors <|
     -->   Nonempty
     -->     (AtIndex 1 <|
-    -->       Nonempty (Pure <| Failure "Expected a string" Encode.null) []
+    -->       Nonempty (Pure <| Expected TString Encode.null) []
     -->     )
     -->     []
 
@@ -482,7 +499,7 @@ list (Decoder decoderFn) =
                         |> Result.map (Tuple.mapFirst (Array True))
 
                 _ ->
-                    expected "an array" json
+                    expected TArray json
 
 
 {-| _Convenience function._ Decode a JSON array into an Elm `Array`.
@@ -524,7 +541,7 @@ children. It is, as such, fairly well behaved.
 
     """ [] """
         |> decodeString isObject
-    --> Errors <| Nonempty.fromElement <| Pure <| Failure "Expected an object" (Encode.list [])
+    --> Errors <| Nonempty.fromElement <| Pure <| Expected TObject (Encode.list [])
 
 -}
 isObject : Decoder ()
@@ -536,7 +553,7 @@ isObject =
                     Ok ( Object True pairs, () )
 
                 _ ->
-                    expected "an object" json
+                    expected TObject json
 
 
 {-| Similar to `isObject`, a decoder to ascertain that a JSON value is a JSON
@@ -555,7 +572,7 @@ array.
 
     """ null """
         |> decodeString isArray
-    --> Errors <| Nonempty.fromElement <| Pure <| Failure "Expected an array" Encode.null
+    --> Errors <| Nonempty.fromElement <| Pure <| Expected TArray Encode.null
 
 -}
 isArray : Decoder ()
@@ -567,7 +584,7 @@ isArray =
                     Ok ( Array True values, () )
 
                 _ ->
-                    expected "an array" json
+                    expected TArray json
 
 
 {-| Decode a specific index using a specified `Decoder`.
@@ -594,7 +611,7 @@ index idx (Decoder decoderFn) =
         finalize json ( _, values, res ) =
             case res of
                 Nothing ->
-                    expected ("an array with index " ++ toString idx) json
+                    expected (TArrayIndex idx) json
 
                 Just (Err e) ->
                     Err e
@@ -637,7 +654,7 @@ index idx (Decoder decoderFn) =
                         |> finalize json
 
                 _ ->
-                    expected "an array" json
+                    expected TArray json
 
 
 {-| Decode a JSON object into a list of key-value pairs. The decoder you provide
@@ -680,7 +697,7 @@ keyValuePairs (Decoder decoderFn) =
                         |> Result.map (Tuple.mapFirst (Object True))
 
                 _ ->
-                    expected "an object" json
+                    expected TObject json
 
 
 {-| Decode the content of a field using a provided decoder.
@@ -735,7 +752,7 @@ field fieldName (Decoder decoderFn) =
         finalize json ( values, res ) =
             case res of
                 Nothing ->
-                    expected ("an object with a field '" ++ fieldName ++ "'") json
+                    expected (TObjectField fieldName) json
 
                 Just (Err e) ->
                     Err e
@@ -751,7 +768,7 @@ field fieldName (Decoder decoderFn) =
                         |> finalize json
 
                 _ ->
-                    expected "an object" json
+                    expected TObject json
 
 
 {-| Decodes a value at a certain path, using a provided decoder. Essentially,
@@ -784,8 +801,8 @@ If all fail, the errors are collected into a `BadOneOf`.
     """ null """
         |> decodeString (oneOf [ string, map toString int ])
     --> Errors <| Nonempty.fromElement <| Pure <| BadOneOf
-    -->   [ Nonempty.fromElement <| Pure <| Failure "Expected a string" Encode.null
-    -->   , Nonempty.fromElement <| Pure <| Failure "Expected an integer number" Encode.null
+    -->   [ Nonempty.fromElement <| Pure <| Expected TString Encode.null
+    -->   , Nonempty.fromElement <| Pure <| Expected TInt Encode.null
     -->   ]
 
 -}
@@ -1115,10 +1132,10 @@ type AnnotatedValue
     | Object Bool (List ( String, AnnotatedValue ))
 
 
-expected : String -> AnnotatedValue -> Result Errors a
+expected : ExpectedType -> AnnotatedValue -> Result Errors a
 expected expectedType json =
     encode json
-        |> Failure ("Expected " ++ expectedType)
+        |> Expected expectedType
         |> Pure
         |> Nonempty.fromElement
         |> Err
@@ -1248,7 +1265,7 @@ markUsed annotatedValue =
     """ ["foo"] """
         |> decodeString isArray
         |> strict
-    --> (Pure <| Failure "Unused value" (Encode.string "foo"))
+    --> (Pure <| Failure "Unused value" (Just <| Encode.string "foo"))
     -->   |> (AtIndex 0 << Nonempty.fromElement)
     -->   |> (Err << Nonempty.fromElement)
 
@@ -1260,7 +1277,7 @@ strict res =
             Err e
 
         BadJson ->
-            Err <| Nonempty.fromElement <| Pure <| Failure "Invalid JSON" Encode.null
+            Err <| Nonempty.fromElement <| Pure <| Failure "Invalid JSON" Nothing
 
         WithWarnings w _ ->
             Err <| warningsToErrors w
@@ -1276,7 +1293,7 @@ warningsToErrors =
 
 warningToError : Warning -> Error
 warningToError (UnusedValue v) =
-    Failure "Unused value" v
+    Failure "Unused value" (Just v)
 
 
 {-| Stringifies warnings to a human readable string.
@@ -1311,9 +1328,10 @@ jsonLines =
 -}
 errorsToString : Errors -> String
 errorsToString errors =
-    "I encountered some erors while decoding this JSON:"
+    "I encountered some errors while decoding this JSON:"
         :: ""
         :: errorsToStrings errors
+        |> List.map String.trimRight
         |> String.join "\n"
 
 
@@ -1325,8 +1343,23 @@ errorsToStrings errors =
 errorToString : Error -> List String
 errorToString error =
     case error of
-        Failure e json ->
-            e :: jsonLines json
+        Failure failure json ->
+            case json of
+                Just value ->
+                    failure
+                        :: ""
+                        :: (indent <| jsonLines value)
+
+                Nothing ->
+                    [ failure ]
+
+        Expected expectedType actualValue ->
+            ("I expected "
+                ++ expectedTypeToString expectedType
+                ++ " here, but instead found this value:"
+            )
+                :: ""
+                :: (indent <| jsonLines actualValue)
 
         BadOneOf errors ->
             case errors of
@@ -1337,3 +1370,34 @@ errorToString error =
                     "I encountered multiple issues"
                         :: ""
                         :: List.concatMap errorsToStrings errors
+
+
+expectedTypeToString : ExpectedType -> String
+expectedTypeToString expected =
+    case expected of
+        TString ->
+            "a string"
+
+        TInt ->
+            "an integer number"
+
+        TNumber ->
+            "a number"
+
+        TNull ->
+            "null"
+
+        TBool ->
+            "a boolean"
+
+        TArray ->
+            "an array"
+
+        TObject ->
+            "an object"
+
+        TArrayIndex idx ->
+            "an array with index " ++ toString idx
+
+        TObjectField field ->
+            "an object with a field '" ++ toString field ++ "'"
