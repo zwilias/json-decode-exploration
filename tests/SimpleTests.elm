@@ -443,3 +443,27 @@ decodingAFieldDoesNotMarkTheOthersAsUsed =
             """ { "foo": "bar", "baz": null } """
                 |> Decode.decodeString (Decode.field "foo" Decode.string)
                 |> Expect.equal (WithWarnings expectedWarnings "bar")
+
+
+warningsInStrictModeAreErrors : Test
+warningsInStrictModeAreErrors =
+    let
+        expectedMessage : String
+        expectedMessage =
+            """I encountered some errors while decoding this JSON:
+
+  ignoring real value
+
+    null
+
+  Unused value
+
+    null"""
+    in
+    test "Warnings in strict mode become errors" <|
+        \_ ->
+            """ null """
+                |> Decode.decodeString (Decode.succeed 12 |> Decode.warn "ignoring real value")
+                |> Decode.strict
+                |> Result.mapError Decode.errorsToString
+                |> Expect.equal (Err expectedMessage)

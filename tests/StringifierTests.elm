@@ -96,6 +96,24 @@ At path /root/1
                 |> Expect.equal (Just expectedWarning)
 
 
+manualWarning : Test
+manualWarning =
+    let
+        expectedWarning =
+            formatWarning """
+  null!
+
+    null
+"""
+    in
+    test "manual warning" <|
+        \_ ->
+            """ null """
+                |> decodeString (warn "null!" (null Nothing))
+                |> warnings
+                |> Expect.equal (Just expectedWarning)
+
+
 errors : DecodeResult a -> Maybe String
 errors res =
     case res of

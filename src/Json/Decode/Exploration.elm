@@ -44,6 +44,7 @@ module Json.Decode.Exploration
         , string
         , succeed
         , value
+        , warn
         , warningsToString
         )
 
@@ -134,7 +135,7 @@ to blow up completely. Don't try this, except maybe at home.
 
 # Fancy Decoding
 
-@docs lazy, value, null, check, succeed, fail, andThen
+@docs lazy, value, null, check, succeed, fail, warn, andThen
 
 
 # Mapping
@@ -216,6 +217,7 @@ describe the path to the warnings.
 -}
 type Warning
     = UnusedValue Value
+    | Warning String Value
 
 
 {-| Decoding can have 4 different outcomes:
@@ -237,11 +239,32 @@ type DecodeResult a
 
 
 {-| Kind of the core idea of this library. Think of it as a piece of data that
-described _how_ to read and transform JSON. You can use `decodeString` and
+describes _how_ to read and transform JSON. You can use `decodeString` and
 `decodeValue` to actually execute a decoder on JSON.
 -}
 type Decoder a
-    = Decoder (AnnotatedValue -> Result Errors ( AnnotatedValue, a ))
+    = Decoder (AnnotatedValue -> Result Errors (Acc a))
+
+
+type alias Acc a =
+    { json : AnnotatedValue
+    , value : a
+    , warnings : List (Located Warning)
+    }
+
+
+mapAcc : (a -> b) -> Acc a -> Acc b
+mapAcc f acc =
+    { acc | value = f acc.value }
+
+
+ok : AnnotatedValue -> a -> Result e (Acc a)
+ok json value =
+    Ok
+        { json = json
+        , value = value
+        , warnings = []
+        }
 
 
 {-| Run a `Decoder` on a `Value`.
@@ -262,13 +285,13 @@ decodeValue (Decoder decoderFn) value =
                 Err errors ->
                     Errors errors
 
-                Ok ( processedJson, val ) ->
-                    case gatherWarnings processedJson of
+                Ok acc ->
+                    case acc.warnings ++ gatherWarnings acc.json of
                         [] ->
-                            Success val
+                            Success acc.value
 
                         x :: xs ->
-                            WithWarnings (Nonempty x xs) val
+                            WithWarnings (Nonempty x xs) acc.value
 
 
 {-| Decode a JSON string. If the string isn't valid JSON, this will fail with a
@@ -309,7 +332,7 @@ warning.
 -}
 succeed : a -> Decoder a
 succeed val =
-    Decoder <| \json -> Ok ( json, val )
+    Decoder <| \json -> ok json val
 
 
 {-| Ignore the json and fail with a provided message.
@@ -331,6 +354,53 @@ fail message =
                 |> Err
 
 
+{-| Add a warning to the result of a decoder.
+
+For example, imagine we are upgrading some internal JSON format. We might add a
+temporary workaround for backwards compatibility. By adding a warning to the
+decoder, we can flag these or print them during development.
+
+    decoder : Decoder (List Int)
+    decoder =
+        oneOf
+            [ list int
+            , int |> map List.singleton |> warn "Converted to list"
+            ]
+
+    expectedWarnings : Warnings
+    expectedWarnings =
+        Warning "Converted to list" (Encode.int 123)
+            |> Pure
+            |> Nonempty.fromElement
+
+    """ 123 """
+       |>  decodeString decoder
+    --> WithWarnings expectedWarnings [ 123 ]
+
+Note that warnings added to a failing decoder won't show up.
+
+    """ null """
+        |> decodeString (warn "this might be null" int)
+    --> Errors (Nonempty.fromElement (Pure <| Expected TInt Encode.null))
+
+-}
+warn : String -> Decoder a -> Decoder a
+warn message (Decoder decoderFn) =
+    Decoder <|
+        \json ->
+            case decoderFn json of
+                Err e ->
+                    Err e
+
+                Ok acc ->
+                    let
+                        warning : Located Warning
+                        warning =
+                            Pure <| Warning message (encode acc.json)
+                    in
+                    Ok { acc | warnings = warning :: acc.warnings }
+
+
 {-| Decode a string.
 
     """ "hello world" """
@@ -349,7 +419,7 @@ string =
         \json ->
             case json of
                 String _ value ->
-                    Ok ( markUsed json, value )
+                    ok (markUsed json) value
 
                 _ ->
                     expected TString json
@@ -369,7 +439,7 @@ value : Decoder Value
 value =
     Decoder <|
         \json ->
-            Ok ( markUsed json, encode json )
+            ok (markUsed json) (encode json)
 
 
 {-| Decode a number into a `Float`.
@@ -395,7 +465,7 @@ float =
         \json ->
             case json of
                 Number _ value ->
-                    Ok ( markUsed json, value )
+                    ok (markUsed json) value
 
                 _ ->
                     expected TNumber json
@@ -423,7 +493,7 @@ int =
             case json of
                 Number _ value ->
                     if toFloat (round value) == value then
-                        Ok ( markUsed json, round value )
+                        ok (markUsed json) (round value)
                     else
                         expected TInt json
 
@@ -444,7 +514,7 @@ bool =
         \json ->
             case json of
                 Bool _ value ->
-                    Ok ( markUsed json, value )
+                    ok (markUsed json) value
 
                 _ ->
                     expected TBool json
@@ -478,7 +548,7 @@ null val =
         \json ->
             case json of
                 Null _ ->
-                    Ok ( Null True, val )
+                    ok (Null True) val
 
                 _ ->
                     expected TNull json
@@ -506,8 +576,8 @@ list (Decoder decoderFn) =
     let
         accumulate :
             AnnotatedValue
-            -> ( Int, Result Errors ( List AnnotatedValue, List a ) )
-            -> ( Int, Result Errors ( List AnnotatedValue, List a ) )
+            -> ( Int, Result Errors ( List AnnotatedValue, List (Located Warning), List a ) )
+            -> ( Int, Result Errors ( List AnnotatedValue, List (Located Warning), List a ) )
         accumulate value ( idx, acc ) =
             case ( acc, decoderFn value ) of
                 ( Err errors, Err newErrors ) ->
@@ -523,18 +593,22 @@ list (Decoder decoderFn) =
                     , Err <| Nonempty.fromElement (AtIndex idx errors)
                     )
 
-                ( Ok ( jsonAcc, valAcc ), Ok ( json, val ) ) ->
-                    ( idx - 1, Ok ( json :: jsonAcc, val :: valAcc ) )
+                ( Ok ( jsonAcc, warnAcc, valAcc ), Ok { json, warnings, value } ) ->
+                    ( idx - 1, Ok ( json :: jsonAcc, warnings ++ warnAcc, value :: valAcc ) )
+
+        finalize : ( List AnnotatedValue, List (Located Warning), b ) -> Acc b
+        finalize ( json, warnings, values ) =
+            { json = Array True json, warnings = warnings, value = values }
     in
     Decoder <|
         \json ->
             case json of
                 Array _ values ->
                     List.foldr accumulate
-                        ( List.length values - 1, Ok ( [], [] ) )
+                        ( List.length values - 1, Ok ( [], [], [] ) )
                         values
                         |> Tuple.second
-                        |> Result.map (Tuple.mapFirst (Array True))
+                        |> Result.map finalize
 
                 _ ->
                     expected TArray json
@@ -588,7 +662,7 @@ isObject =
         \json ->
             case json of
                 Object _ pairs ->
-                    Ok ( Object True pairs, () )
+                    ok (Object True pairs) ()
 
                 _ ->
                     expected TObject json
@@ -619,7 +693,7 @@ isArray =
         \json ->
             case json of
                 Array _ values ->
-                    Ok ( Array True values, () )
+                    ok (Array True values) ()
 
                 _ ->
                     expected TArray json
@@ -644,9 +718,9 @@ index idx (Decoder decoderFn) =
     let
         finalize :
             AnnotatedValue
-            -> ( b, List AnnotatedValue, Maybe (Result Errors a) )
-            -> Result Errors ( AnnotatedValue, a )
-        finalize json ( _, values, res ) =
+            -> ( b, List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
+            -> Result Errors (Acc a)
+        finalize json ( _, values, warnings, res ) =
             case res of
                 Nothing ->
                     expected (TArrayIndex idx) json
@@ -655,29 +729,32 @@ index idx (Decoder decoderFn) =
                     Err e
 
                 Just (Ok v) ->
-                    Ok ( Array True values, v )
+                    Ok { json = Array True values, warnings = warnings, value = v }
 
         accumulate :
             AnnotatedValue
-            -> ( Int, List AnnotatedValue, Maybe (Result Errors a) )
-            -> ( Int, List AnnotatedValue, Maybe (Result Errors a) )
-        accumulate value ( i, acc, result ) =
+            -> ( Int, List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
+            -> ( Int, List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
+        accumulate value ( i, acc, warnings, result ) =
             if i == idx then
                 case decoderFn value of
                     Err e ->
                         ( i - 1
                         , value :: acc
+                        , warnings
                         , Just <| Err <| Nonempty.fromElement <| AtIndex i e
                         )
 
-                    Ok ( updatedJson, res ) ->
+                    Ok res ->
                         ( i - 1
-                        , updatedJson :: acc
-                        , Just <| Ok res
+                        , res.json :: acc
+                        , res.warnings ++ warnings
+                        , Just <| Ok res.value
                         )
             else
                 ( i - 1
                 , value :: acc
+                , warnings
                 , result
                 )
     in
@@ -687,7 +764,7 @@ index idx (Decoder decoderFn) =
                 Array _ values ->
                     List.foldr
                         accumulate
-                        ( List.length values - 1, [], Nothing )
+                        ( List.length values - 1, [], [], Nothing )
                         values
                         |> finalize json
 
@@ -708,8 +785,8 @@ keyValuePairs (Decoder decoderFn) =
     let
         accumulate :
             ( String, AnnotatedValue )
-            -> Result Errors ( List ( String, AnnotatedValue ), List ( String, a ) )
-            -> Result Errors ( List ( String, AnnotatedValue ), List ( String, a ) )
+            -> Result Errors ( List ( String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
+            -> Result Errors ( List ( String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
         accumulate ( key, value ) acc =
             case ( acc, decoderFn value ) of
                 ( Err e, Err new ) ->
@@ -721,18 +798,26 @@ keyValuePairs (Decoder decoderFn) =
                 ( _, Err e ) ->
                     Err <| Nonempty.fromElement (InField key e)
 
-                ( Ok ( jsonAcc, resAcc ), Ok ( newJson, newRes ) ) ->
+                ( Ok ( jsonAcc, warningsAcc, accAcc ), Ok res ) ->
                     Ok
-                        ( ( key, newJson ) :: jsonAcc
-                        , ( key, newRes ) :: resAcc
+                        ( ( key, res.json ) :: jsonAcc
+                        , List.map (Nonempty.fromElement >> InField key) res.warnings ++ warningsAcc
+                        , ( key, res.value ) :: accAcc
                         )
+
+        finalize : ( List ( String, AnnotatedValue ), List (Located Warning), b ) -> Acc b
+        finalize ( json, warnings, value ) =
+            { json = Object True json
+            , warnings = warnings
+            , value = value
+            }
     in
     Decoder <|
         \json ->
             case json of
                 Object _ kvPairs ->
-                    List.foldr accumulate (Ok ( [], [] )) kvPairs
-                        |> Result.map (Tuple.mapFirst (Object True))
+                    List.foldr accumulate (Ok ( [], [], [] )) kvPairs
+                        |> Result.map finalize
 
                 _ ->
                     expected TObject json
@@ -766,28 +851,30 @@ field fieldName (Decoder decoderFn) =
     let
         accumulate :
             ( String, AnnotatedValue )
-            -> ( List ( String, AnnotatedValue ), Maybe (Result Errors a) )
-            -> ( List ( String, AnnotatedValue ), Maybe (Result Errors a) )
-        accumulate ( key, value ) ( acc, result ) =
+            -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
+            -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
+        accumulate ( key, value ) ( acc, warnings, result ) =
             if key == fieldName then
                 case decoderFn value of
                     Err e ->
                         ( ( key, value ) :: acc
+                        , warnings
                         , Just <| Err <| Nonempty.fromElement <| InField key e
                         )
 
-                    Ok ( newValue, v ) ->
-                        ( ( key, newValue ) :: acc
-                        , Just <| Ok v
+                    Ok res ->
+                        ( ( key, res.json ) :: acc
+                        , List.map (Nonempty.fromElement >> InField key) res.warnings ++ warnings
+                        , Just <| Ok res.value
                         )
             else
-                ( ( key, value ) :: acc, result )
+                ( ( key, value ) :: acc, warnings, result )
 
         finalize :
             AnnotatedValue
-            -> ( List ( String, AnnotatedValue ), Maybe (Result Errors a) )
-            -> Result Errors ( AnnotatedValue, a )
-        finalize json ( values, res ) =
+            -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
+            -> Result Errors (Acc a)
+        finalize json ( values, warnings, res ) =
             case res of
                 Nothing ->
                     expected (TObjectField fieldName) json
@@ -796,13 +883,13 @@ field fieldName (Decoder decoderFn) =
                     Err e
 
                 Just (Ok v) ->
-                    Ok ( Object True values, v )
+                    Ok { json = Object True values, warnings = warnings, value = v }
     in
     Decoder <|
         \json ->
             case json of
                 Object _ kvPairs ->
-                    List.foldr accumulate ( [], Nothing ) kvPairs
+                    List.foldr accumulate ( [], [], Nothing ) kvPairs
                         |> finalize json
 
                 _ ->
@@ -855,7 +942,7 @@ oneOfHelp :
     List (Decoder a)
     -> AnnotatedValue
     -> List Errors
-    -> Result Errors ( AnnotatedValue, a )
+    -> Result Errors (Acc a)
 oneOfHelp decoders value errorAcc =
     case decoders of
         [] ->
@@ -866,8 +953,8 @@ oneOfHelp decoders value errorAcc =
 
         (Decoder decoderFn) :: rest ->
             case decoderFn value of
-                Ok ( newJson, res ) ->
-                    Ok ( newJson, res )
+                Ok res ->
+                    Ok res
 
                 Err e ->
                     oneOfHelp rest value (e :: errorAcc)
@@ -979,7 +1066,7 @@ map : (a -> b) -> Decoder a -> Decoder b
 map f (Decoder decoderFn) =
     Decoder <|
         \json ->
-            Result.map (Tuple.mapSecond f) (decoderFn json)
+            Result.map (mapAcc f) (decoderFn json)
 
 
 {-| Chain decoders where one decoder depends on the value of another decoder.
@@ -989,12 +1076,13 @@ andThen toDecoderB (Decoder decoderFnA) =
     Decoder <|
         \json ->
             case decoderFnA json of
-                Ok ( newJson, valA ) ->
+                Ok accA ->
                     let
                         (Decoder decoderFnB) =
-                            toDecoderB valA
+                            toDecoderB accA.value
                     in
-                    decoderFnB newJson
+                    decoderFnB accA.json
+                        |> Result.map (\accB -> { accB | warnings = accA.warnings ++ accB.warnings })
 
                 Err e ->
                     Err e
@@ -1007,10 +1095,14 @@ map2 f (Decoder decoderFnA) (Decoder decoderFnB) =
     Decoder <|
         \json ->
             case decoderFnA json of
-                Ok ( newJson, valA ) ->
-                    case decoderFnB newJson of
-                        Ok ( finalJson, valB ) ->
-                            Ok ( finalJson, f valA valB )
+                Ok accA ->
+                    case decoderFnB accA.json of
+                        Ok accB ->
+                            Ok
+                                { json = accB.json
+                                , value = f accA.value accB.value
+                                , warnings = accA.warnings ++ accB.warnings
+                                }
 
                         Err e ->
                             Err e
@@ -1359,8 +1451,13 @@ warningsToErrors =
 
 
 warningToError : Warning -> Error
-warningToError (UnusedValue v) =
-    Failure "Unused value" (Just v)
+warningToError warning =
+    case warning of
+        UnusedValue v ->
+            Failure "Unused value" (Just v)
+
+        Warning w v ->
+            Failure w (Just v)
 
 
 {-| Stringifies warnings to a human readable string.
@@ -1375,10 +1472,19 @@ warningsToString warnings =
 
 
 warningToString : Warning -> List String
-warningToString (UnusedValue v) =
-    "Unused value:"
+warningToString warning =
+    let
+        ( message, value ) =
+            case warning of
+                Warning message value ->
+                    ( message, value )
+
+                UnusedValue value ->
+                    ( "Unused value:", value )
+    in
+    message
         :: ""
-        :: (indent <| jsonLines v)
+        :: (indent <| jsonLines value)
 
 
 indent : List String -> List String
