@@ -1,21 +1,51 @@
-module Json.Decode.Exploration.Located exposing (..)
+module Json.Decode.Exploration.Located exposing (Located(..), map, toString)
+
+{-| A type that gives one or more pieces of information, tagged with a path
+through a datastructure with fields and indices.
+
+Most importantly, it is used for both `Warnings` and `Errors` in `Json.Decode.Exploration`.
+
+@docs Located, toString, map
+
+-}
 
 import List.Nonempty as Nonempty exposing (Nonempty(..))
-import Set exposing (Set)
 
 
+{-| -}
 type Located a
     = InField String (Nonempty (Located a))
     | AtIndex Int (Nonempty (Located a))
     | Pure a
 
 
+{-| Allows turning a non-empty list of `Located a` into a flat list of human
+readable strings, provided we have a way to turn an `a` into some lines of text.
+
+Each string represents a line. This allows arbitrary indentation by mapping over
+the lines and prepending some whitespace.
+
+-}
 toString : (a -> List String) -> Nonempty (Located a) -> List String
 toString itemToString locatedItems =
     locatedItems
         |> gather ""
         |> List.map (uncurry <| render itemToString)
         |> intercalate ""
+
+
+{-| -}
+map : (a -> b) -> Located a -> Located b
+map op located =
+    case located of
+        InField f val ->
+            InField f <| Nonempty.map (map op) val
+
+        AtIndex i val ->
+            AtIndex i <| Nonempty.map (map op) val
+
+        Pure v ->
+            Pure (op v)
 
 
 intercalate : a -> List (List a) -> List a
@@ -59,16 +89,3 @@ gather : String -> Nonempty (Located a) -> List ( String, List a )
 gather prefix (Nonempty first rest) =
     List.concatMap flatten (first :: rest)
         |> List.map (Tuple.mapFirst ((++) prefix))
-
-
-map : (a -> b) -> Located a -> Located b
-map op located =
-    case located of
-        InField f val ->
-            InField f <| Nonempty.map (map op) val
-
-        AtIndex i val ->
-            AtIndex i <| Nonempty.map (map op) val
-
-        Pure v ->
-            Pure (op v)
