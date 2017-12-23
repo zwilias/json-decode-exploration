@@ -47,9 +47,31 @@ module Json.Decode.Exploration
         , warningsToString
         )
 
-{-| Like the regular decoders, except
+{-| This package presents a somewhat experimental approach to JSON decoding. Its
+API looks very much like the core `Json.Decode` API. The major differences are
+the final `decodeString` and `decodeValue` functions, which return a
+`DecodeResult a`.
 
-Examples assume imports:
+Decoding with this library can result in one of 4 possible outcomes:
+
+  - The input wasn't valid JSON
+  - One or more errors occured
+  - Decoding succeeded but produced warnings
+  - Decoding succeeded without warnings
+
+Both the `Errors` and `Warnings` types are (mostly) machine readable: they are
+implemented as a recursive datastructure that points to the location of the
+error in the input json, producing information about what went wrong (i.e. "what
+was the expected type, and what did the actual value look like").
+
+Further, this library also adds a few extra `Decoder`s that help with making
+assertions about the structure of the JSON while decoding.
+
+For convenience, this library also includes a `Json.Decode.Exploration.Pipeline`
+module which is largely a copy of [`NoRedInk/elm-decode-pipeline`][edp].
+
+All the examples in the documentation are verified by
+[`elm-verify-examples`][eve] and assume the following imports:
 
     import Json.Encode as Encode
     import Json.Decode.Exploration exposing (..)
@@ -58,15 +80,31 @@ Examples assume imports:
     import Array
     import Dict
 
-
-# Run Decoders
-
-@docs decodeString, decodeValue, DecodeResult, Value, Errors, Error, Warnings, Warning, ExpectedType
+[eve]: https://github.com/stoeffel/elm-verify-examples#readme
+[edp]: http://package.elm-lang.org/packages/NoRedInk/elm-decode-pipeline/latest
 
 
-# Dealing with warnings and errors
+# Running a `Decoder`
 
-@docs strict, errorsToString, warningsToString
+Runing a `Decoder` works largely the same way as it does in the familiar core
+library. There is one serious caveat, however:
+
+> This library does **not** allowing decoding non-serializable JS values.
+
+This means that trying to use this library to decode a `Value` which contains
+non-serializable information like `function`s will not work. It will, however,
+result in a `BadJson` result.
+
+Trying to use this library on cyclic values (like HTML events) is quite likely
+to blow up completely. Don't try this, except maybe at home.
+
+@docs decodeString, decodeValue, strict, DecodeResult, Value
+
+
+## Dealing with warnings and errors
+
+@docs Errors, Error, errorsToString, Warnings, Warning, warningsToString
+@docs ExpectedType
 
 
 # Primitives
@@ -132,7 +170,7 @@ type alias Value =
 {-| Decoding may fail with 1 or more errors, so `Errors` is a
 [`Nonempty`][nonempty] of errors.
 
-[nonempty]: TODO
+[nonempty]: http://package.elm-lang.org/packages/mgold/elm-nonempty-list/latest/List-Nonempty
 
 -}
 type alias Errors =
