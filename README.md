@@ -11,6 +11,35 @@ continued discovery of edge-cases and bugs!
 
 ## Changelog
 
+### Unreleased
+
+#### Added
+
+- `Json.Decode.Exploration.Located`
+
+   A module that describes the location of an error or warning within the JSON.
+   Using a single datatype to represent these means we get to treat them in a
+   uniform way.
+
+- `Json.Decode.Exploration`:
+   - `strict : DecodeResult a -> Result Errors a`: interpret a decoderesult in
+     a strict manner; converting warnings to errors.
+   - `warningsToString` and `errorsToString`: Turn the machine readable `Errors`
+     and `Warnings` into human readable `String`s.
+
+     Together with `strict`, this can be used to create a `Decoder a -> String
+     -> Result String a` function for compatibility with the core API.
+   - `warn : String -> Decoder a -> Decoder a`: attach a warning to a decoder. 
+   - `ExpectedType`: type to represent the expected type for errors.
+
+#### Changed
+
+- `Json.Decode.Exploration`:
+   - `Warnings` and `Errors` are now defined in terms of the `Located` type.
+   - `Error` now has machine readable "expected type" errors.
+   - `Warning` now has a `Warning String Value` constructor for arbitrary
+     warnings.
+
 ### 4.3.0
 
 #### Added
