@@ -7,6 +7,19 @@ Made with ❤️  and released under BSD3. My eternal thanks to
 [@michaeljones](https://github.com/michaeljones) for his invaluable feedback and
 continued discovery of edge-cases and bugs!
 
+
+## Contributing
+
+Contributions are super-welcome. For larger changes, please do contact me first
+on Slack so we can talk things through. For bugs or incorrect behaviour, open an
+issue so we can quickly hash out a decent solution, and get everyone on the same
+wavelength before any code is written. Contribution is collaboration, which
+can't happen in a void.
+
+We have a decent test-suite, but the more the merrier. Additionally, every
+example in the docs is verified using `elm-verify-examples`. To make sure
+everything still works, `npm test` will check both.
+
 ---
 
 ## Changelog
