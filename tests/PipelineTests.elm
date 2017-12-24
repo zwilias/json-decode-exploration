@@ -41,7 +41,7 @@ optionalUnusedField =
         expectedWarnings : Warnings
         expectedWarnings =
             UnusedValue (Encode.int 1)
-                |> Pure
+                |> Here
                 |> Nonempty.fromElement
                 |> InField "a"
                 |> Nonempty.fromElement
@@ -59,7 +59,7 @@ optionalWrongStructure =
         \_ ->
             """ [] """
                 |> decodeString (decode identity |> optional "foo" string "hi")
-                |> Expect.equal (Errors (Nonempty (Pure <| Expected TObject (Encode.list [])) []))
+                |> Expect.equal (Errors (Nonempty (Here <| Expected TObject (Encode.list [])) []))
 
 
 optionalAtWrongStructure : Test
@@ -68,7 +68,7 @@ optionalAtWrongStructure =
         expectedErrors : Errors
         expectedErrors =
             Expected TObject (Encode.list [])
-                |> Pure
+                |> Here
                 |> Nonempty.fromElement
                 |> InField "b"
                 |> Nonempty.fromElement

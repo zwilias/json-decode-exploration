@@ -33,4 +33,4 @@ install:
   - elm package install --yes
 
 script:
-  - npm test
+  - npm run ci

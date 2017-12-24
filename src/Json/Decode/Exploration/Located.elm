@@ -16,7 +16,7 @@ import List.Nonempty as Nonempty exposing (Nonempty(..))
 type Located a
     = InField String (Nonempty (Located a))
     | AtIndex Int (Nonempty (Located a))
-    | Pure a
+    | Here a
 
 
 {-| Allows turning a non-empty list of `Located a` into a flat list of human
@@ -44,8 +44,8 @@ map op located =
         AtIndex i val ->
             AtIndex i <| Nonempty.map (map op) val
 
-        Pure v ->
-            Pure (op v)
+        Here v ->
+            Here (op v)
 
 
 intercalate : a -> List (List a) -> List a
@@ -75,7 +75,7 @@ indent =
 flatten : Located a -> List ( String, List a )
 flatten located =
     case located of
-        Pure v ->
+        Here v ->
             [ ( "", [ v ] ) ]
 
         InField s vals ->

@@ -321,7 +321,7 @@ warning.
     """ null """
         |> decodeString (succeed "hello world")
     --> WithWarnings
-    -->     (Nonempty (Pure <| UnusedValue Encode.null) [])
+    -->     (Nonempty (Here <| UnusedValue Encode.null) [])
     -->     "hello world"
 
 
@@ -339,7 +339,7 @@ succeed val =
 
     """ "hello" """
         |> decodeString (fail "failure")
-    --> Errors (Nonempty (Pure <| Failure "failure" (Just <| Encode.string "hello")) [])
+    --> Errors (Nonempty (Here <| Failure "failure" (Just <| Encode.string "hello")) [])
 
 -}
 fail : String -> Decoder a
@@ -349,7 +349,7 @@ fail message =
             encode json
                 |> Just
                 |> Failure message
-                |> Pure
+                |> Here
                 |> Nonempty.fromElement
                 |> Err
 
@@ -370,7 +370,7 @@ decoder, we can flag these or print them during development.
     expectedWarnings : Warnings
     expectedWarnings =
         Warning "Converted to list" (Encode.int 123)
-            |> Pure
+            |> Here
             |> Nonempty.fromElement
 
     """ 123 """
@@ -381,7 +381,7 @@ Note that warnings added to a failing decoder won't show up.
 
     """ null """
         |> decodeString (warn "this might be null" int)
-    --> Errors (Nonempty.fromElement (Pure <| Expected TInt Encode.null))
+    --> Errors (Nonempty.fromElement (Here <| Expected TInt Encode.null))
 
 -}
 warn : String -> Decoder a -> Decoder a
@@ -396,7 +396,7 @@ warn message (Decoder decoderFn) =
                     let
                         warning : Located Warning
                         warning =
-                            Pure <| Warning message (encode acc.json)
+                            Here <| Warning message (encode acc.json)
                     in
                     Ok { acc | warnings = warning :: acc.warnings }
 
@@ -410,7 +410,7 @@ warn message (Decoder decoderFn) =
 
     """ 123 """
         |> decodeString string
-    --> Errors (Nonempty (Pure <| Expected TString (Encode.int 123)) [])
+    --> Errors (Nonempty (Here <| Expected TString (Encode.int 123)) [])
 
 -}
 string : Decoder String
@@ -456,7 +456,7 @@ value =
 
     """ null """
         |> decodeString float
-    --> Errors (Nonempty (Pure <| Expected TNumber Encode.null) [])
+    --> Errors (Nonempty (Here <| Expected TNumber Encode.null) [])
 
 -}
 float : Decoder Float
@@ -482,7 +482,7 @@ float =
         |> decodeString int
     --> Errors <|
     -->   Nonempty
-    -->     (Pure <| Expected TInt (Encode.float 0.1))
+    -->     (Here <| Expected TInt (Encode.float 0.1))
     -->     []
 
 -}
@@ -538,7 +538,7 @@ verify that a field is _missing_, only that it is explicitly set to `null`.
         |> decodeString (field "foo" (null ()))
     --> Errors <|
     -->   Nonempty
-    -->     (Pure <| Expected (TObjectField "foo") (Encode.object []))
+    -->     (Here <| Expected (TObjectField "foo") (Encode.object []))
     -->     []
 
 -}
@@ -566,7 +566,7 @@ null val =
     --> Errors <|
     -->   Nonempty
     -->     (AtIndex 1 <|
-    -->       Nonempty (Pure <| Expected TString Encode.null) []
+    -->       Nonempty (Here <| Expected TString Encode.null) []
     -->     )
     -->     []
 
@@ -653,7 +653,7 @@ children. It is, as such, fairly well behaved.
 
     """ [] """
         |> decodeString isObject
-    --> Errors <| Nonempty.fromElement <| Pure <| Expected TObject (Encode.list [])
+    --> Errors <| Nonempty.fromElement <| Here <| Expected TObject (Encode.list [])
 
 -}
 isObject : Decoder ()
@@ -678,13 +678,13 @@ array.
 
     """ [ "foo" ] """
         |> decodeString isArray
-    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (Pure <| UnusedValue <|
+    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (Here <| UnusedValue <|
             Encode.string "foo") [])) []) ()
 
 
     """ null """
         |> decodeString isArray
-    --> Errors <| Nonempty.fromElement <| Pure <| Expected TArray Encode.null
+    --> Errors <| Nonempty.fromElement <| Here <| Expected TArray Encode.null
 
 -}
 isArray : Decoder ()
@@ -709,7 +709,7 @@ isArray =
     """ [ "hello", "there" ] """
         |> decodeString (index 1 string)
     --> WithWarnings
-    -->   (Nonempty (AtIndex 0 <| Nonempty (Pure <| UnusedValue (Encode.string "hello")) []) [])
+    -->   (Nonempty (AtIndex 0 <| Nonempty (Here <| UnusedValue (Encode.string "hello")) []) [])
     -->   "there"
 
 -}
@@ -838,7 +838,7 @@ keyValuePairs (Decoder decoderFn) =
     expectedWarnings : Warnings
     expectedWarnings =
         UnusedValue (Encode.string "world")
-            |> Pure
+            |> Here
             |> Nonempty.fromElement
             |> InField "hello"
             |> Nonempty.fromElement
@@ -925,9 +925,9 @@ If all fail, the errors are collected into a `BadOneOf`.
 
     """ null """
         |> decodeString (oneOf [ string, map toString int ])
-    --> Errors <| Nonempty.fromElement <| Pure <| BadOneOf
-    -->   [ Nonempty.fromElement <| Pure <| Expected TString Encode.null
-    -->   , Nonempty.fromElement <| Pure <| Expected TInt Encode.null
+    --> Errors <| Nonempty.fromElement <| Here <| BadOneOf
+    -->   [ Nonempty.fromElement <| Here <| Expected TString Encode.null
+    -->   , Nonempty.fromElement <| Here <| Expected TInt Encode.null
     -->   ]
 
 -}
@@ -947,7 +947,7 @@ oneOfHelp decoders value errorAcc =
     case decoders of
         [] ->
             BadOneOf (List.reverse errorAcc)
-                |> Pure
+                |> Here
                 |> Nonempty.fromElement
                 |> Err
 
@@ -971,7 +971,7 @@ with `Nothing`.
     expectedWarnings : Warnings
     expectedWarnings =
         UnusedValue (Encode.int 12)
-            |> Pure
+            |> Here
             |> Nonempty.fromElement
             |> AtIndex 1
             |> Nonempty.fromElement
@@ -1266,7 +1266,7 @@ expected : ExpectedType -> AnnotatedValue -> Result Errors a
 expected expectedType json =
     encode json
         |> Expected expectedType
-        |> Pure
+        |> Here
         |> Nonempty.fromElement
         |> Err
 
@@ -1318,22 +1318,22 @@ gatherWarnings : AnnotatedValue -> List (Located Warning)
 gatherWarnings json =
     case json of
         String False _ ->
-            [ Pure <| UnusedValue <| encode json ]
+            [ Here <| UnusedValue <| encode json ]
 
         Number False _ ->
-            [ Pure <| UnusedValue <| encode json ]
+            [ Here <| UnusedValue <| encode json ]
 
         Bool False _ ->
-            [ Pure <| UnusedValue <| encode json ]
+            [ Here <| UnusedValue <| encode json ]
 
         Null False ->
-            [ Pure <| UnusedValue <| encode json ]
+            [ Here <| UnusedValue <| encode json ]
 
         Array False _ ->
-            [ Pure <| UnusedValue <| encode json ]
+            [ Here <| UnusedValue <| encode json ]
 
         Object False _ ->
-            [ Pure <| UnusedValue <| encode json ]
+            [ Here <| UnusedValue <| encode json ]
 
         Array _ values ->
             values
@@ -1395,7 +1395,7 @@ markUsed annotatedValue =
     """ ["foo"] """
         |> decodeString isArray
         |> strict
-    --> (Pure <| Failure "Unused value" (Just <| Encode.string "foo"))
+    --> (Here <| Failure "Unused value" (Just <| Encode.string "foo"))
     -->   |> (AtIndex 0 << Nonempty.fromElement)
     -->   |> (Err << Nonempty.fromElement)
 
@@ -1408,7 +1408,7 @@ markUsed annotatedValue =
     """ { "foo": "bar" } """
         |> decodeString isObject
         |> strict
-    --> (Pure <| Failure "Unused value" (Just <| Encode.string "bar"))
+    --> (Here <| Failure "Unused value" (Just <| Encode.string "bar"))
     -->   |> (InField "foo" << Nonempty.fromElement)
     -->   |> (Err << Nonempty.fromElement)
 
@@ -1417,7 +1417,7 @@ Bad JSON will also result in a `Failure`, with `Nothing` as the actual value:
     """ foobar """
         |> decodeString string
         |> strict
-    --> (Pure <| Failure "Invalid JSON" Nothing)
+    --> (Here <| Failure "Invalid JSON" Nothing)
     -->   |> (Err << Nonempty.fromElement)
 
 Errors will still be errors, of course.
@@ -1425,7 +1425,7 @@ Errors will still be errors, of course.
     """ null """
         |> decodeString string
         |> strict
-    --> (Pure <| Expected TString Encode.null)
+    --> (Here <| Expected TString Encode.null)
     -->   |> (Err << Nonempty.fromElement)
 
 -}
@@ -1436,7 +1436,7 @@ strict res =
             Err e
 
         BadJson ->
-            Err <| Nonempty.fromElement <| Pure <| Failure "Invalid JSON" Nothing
+            Err <| Nonempty.fromElement <| Here <| Failure "Invalid JSON" Nothing
 
         WithWarnings w _ ->
             Err <| warningsToErrors w

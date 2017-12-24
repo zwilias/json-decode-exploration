@@ -1,8 +1,9 @@
 {
     "scripts": {
-        "test:local": "elm-verify-examples && elm-test",
-        "test": "elm-format --validate src && elm-verify-examples && npm run coverage",
-        "coverage": "elm-coverage --report codecov --elm-test ./node_modules/.bin/elm-test && codecov --disable=gcov -f .coverage/codecov.json"
+        "test": "elm-verify-examples && elm-test",
+        "ci": "elm-format --validate src && elm-verify-examples && npm run coverage",
+        "coverage": "elm-coverage --report codecov --elm-test ./node_modules/.bin/elm-test && codecov --disable=gcov -f .coverage/codecov.json",
+        "docs": "elm-make --docs docs.json"
     },
     "dependencies": {
         "codecov": "^3.0.0",

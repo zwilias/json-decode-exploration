@@ -37,7 +37,7 @@ unusedValueTest value =
     let
         warnings : Warnings
         warnings =
-            Nonempty (Pure <| UnusedValue value) []
+            Nonempty (Here <| UnusedValue value) []
     in
     test (Encode.encode 0 value) <|
         \_ ->
@@ -75,7 +75,7 @@ simpleUnexpectedType value decoder expected =
         expectedErrors : Errors
         expectedErrors =
             Nonempty
-                (Pure <| Expected expected value)
+                (Here <| Expected expected value)
                 []
     in
     test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ toString expected) <|
@@ -314,7 +314,7 @@ listCollectsErrors =
         badIndex idx =
             AtIndex idx <|
                 Nonempty
-                    (Pure <| Expected TString (Encode.int idx))
+                    (Here <| Expected TString (Encode.int idx))
                     []
 
         expectedErrors : Errors
@@ -335,7 +335,7 @@ indexPropagatesErrors =
         badIndex idx =
             AtIndex idx <|
                 Nonempty
-                    (Pure <| Expected TString (Encode.int idx))
+                    (Here <| Expected TString (Encode.int idx))
                     []
 
         expectedErrors : Errors
@@ -356,7 +356,7 @@ keyValuePairsCollectsErrors =
         badField field =
             InField field <|
                 Nonempty
-                    (Pure <| Expected TString Encode.null)
+                    (Here <| Expected TString Encode.null)
                     []
 
         expectedErrors : Errors
@@ -381,7 +381,7 @@ map2CombineErrors =
         badIndex idx =
             AtIndex idx <|
                 Nonempty
-                    (Pure <| Expected TInt Encode.null)
+                    (Here <| Expected TInt Encode.null)
                     []
     in
     [ ( """ [ null, null ] """, Errors <| Nonempty (badIndex 0) [ badIndex 1 ] )
@@ -422,7 +422,7 @@ andThenPreservesErrors =
                 |> Expect.equal
                     (Errors <|
                         Nonempty
-                            (Pure <| Expected TString Encode.null)
+                            (Here <| Expected TString Encode.null)
                             []
                     )
 
@@ -433,7 +433,7 @@ decodingAFieldDoesNotMarkTheOthersAsUsed =
         expectedWarnings : Warnings
         expectedWarnings =
             UnusedValue Encode.null
-                |> Pure
+                |> Here
                 |> Nonempty.fromElement
                 |> InField "baz"
                 |> Nonempty.fromElement
