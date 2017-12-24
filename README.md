@@ -24,7 +24,7 @@ everything still works, `npm test` will check both.
 
 ## Changelog
 
-### Unreleased
+### 5.0.0
 
 #### Added
 
