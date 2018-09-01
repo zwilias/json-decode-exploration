@@ -24,6 +24,15 @@ everything still works, `npm test` will check both.
 
 ## Changelog
 
+### 5.0.1
+
+Elm 0.19.0 compatibility 🎉
+
+#### Changed
+
+- `Json.Decode.Exploration.check` no longer includes the expected value in the error
+- `Json.Decode.Exploration.Pipeline.checked` no longer includes the expected value in the error
+
 ### 5.0.0
 
 #### Added
