@@ -1,52 +1,15 @@
-module Json.Decode.Exploration
-    exposing
-        ( DecodeResult(..)
-        , Decoder
-        , Error(..)
-        , Errors
-        , ExpectedType(..)
-        , Value
-        , Warning(..)
-        , Warnings
-        , andMap
-        , andThen
-        , array
-        , at
-        , bool
-        , check
-        , decodeString
-        , decodeValue
-        , dict
-        , errorsToString
-        , fail
-        , field
-        , float
-        , index
-        , int
-        , isArray
-        , isObject
-        , keyValuePairs
-        , lazy
-        , list
-        , map
-        , map2
-        , map3
-        , map4
-        , map5
-        , map6
-        , map7
-        , map8
-        , maybe
-        , null
-        , nullable
-        , oneOf
-        , strict
-        , string
-        , succeed
-        , value
-        , warn
-        , warningsToString
-        )
+module Json.Decode.Exploration exposing
+    ( decodeString, decodeValue, strict, DecodeResult(..), Value
+    , Errors, Error(..), errorsToString, Warnings, Warning(..), warningsToString
+    , ExpectedType(..)
+    , Decoder, string, bool, int, float
+    , nullable, list, array, dict, keyValuePairs
+    , isObject, isArray
+    , field, at, index
+    , maybe, oneOf
+    , lazy, value, null, check, succeed, fail, warn, andThen
+    , map, map2, map3, map4, map5, map6, map7, map8, andMap
+    )
 
 {-| This package presents a somewhat experimental approach to JSON decoding. Its
 API looks very much like the core `Json.Decode` API. The major differences are
@@ -71,17 +34,6 @@ assertions about the structure of the JSON while decoding.
 For convenience, this library also includes a `Json.Decode.Exploration.Pipeline`
 module which is largely a copy of [`NoRedInk/elm-decode-pipeline`][edp].
 
-All the examples in the documentation are verified by
-[`elm-verify-examples`][eve] and assume the following imports:
-
-    import Json.Encode as Encode
-    import Json.Decode.Exploration exposing (..)
-    import Json.Decode.Exploration.Located exposing (Located(..))
-    import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
-    import Array
-    import Dict
-
-[eve]: https://github.com/stoeffel/elm-verify-examples#readme
 [edp]: http://package.elm-lang.org/packages/NoRedInk/elm-decode-pipeline/latest
 
 
@@ -147,11 +99,6 @@ which makes it easier to handle large objects.
 
 @docs map, map2, map3, map4, map5, map6, map7, map8, andMap
 
-Last but not least, an extra import to allow elm-verify-examples to actually
-verify all the examples:
-
-    import DocVerificationHelpers exposing (Pet(..))
-
 -}
 
 import Array exposing (Array)
@@ -159,7 +106,7 @@ import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Decode.Exploration.Located as Located exposing (Located(..))
 import Json.Encode as Encode
-import List.Nonempty as Nonempty exposing (Nonempty(Nonempty))
+import List.Nonempty as Nonempty exposing (Nonempty(..))
 
 
 {-| A simple type alias for `Json.Decode.Value`.
@@ -255,14 +202,17 @@ type alias Acc a =
 
 mapAcc : (a -> b) -> Acc a -> Acc b
 mapAcc f acc =
-    { acc | value = f acc.value }
+    { json = acc.json
+    , warnings = acc.warnings
+    , value = f acc.value
+    }
 
 
 ok : AnnotatedValue -> a -> Result e (Acc a)
-ok json value =
+ok json val =
     Ok
         { json = json
-        , value = value
+        , value = val
         , warnings = []
         }
 
@@ -275,8 +225,8 @@ when decoding `Event`s - it will blow up. Badly.
 
 -}
 decodeValue : Decoder a -> Value -> DecodeResult a
-decodeValue (Decoder decoderFn) value =
-    case decode value of
+decodeValue (Decoder decoderFn) val =
+    case decode val of
         Err _ ->
             BadJson
 
@@ -313,6 +263,11 @@ value. Note that this may still fail when dealing with an invalid JSON string.
 If a value in the JSON ends up being ignored because of this, this will cause a
 warning.
 
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
+
     """ null """
         |> decodeString (value |> andThen (\_ -> succeed "hello world"))
     --> Success "hello world"
@@ -337,6 +292,10 @@ succeed val =
 
 {-| Ignore the json and fail with a provided message.
 
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
     """ "hello" """
         |> decodeString (fail "failure")
     --> Errors (Nonempty (Here <| Failure "failure" (Just <| Encode.string "hello")) [])
@@ -359,6 +318,10 @@ fail message =
 For example, imagine we are upgrading some internal JSON format. We might add a
 temporary workaround for backwards compatibility. By adding a warning to the
 decoder, we can flag these or print them during development.
+
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
 
     decoder : Decoder (List Int)
     decoder =
@@ -403,6 +366,11 @@ warn message (Decoder decoderFn) =
 
 {-| Decode a string.
 
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
+
     """ "hello world" """
         |> decodeString string
     --> Success "hello world"
@@ -418,8 +386,8 @@ string =
     Decoder <|
         \json ->
             case json of
-                String _ value ->
-                    ok (markUsed json) value
+                String _ val ->
+                    ok (markUsed json) val
 
                 _ ->
                     expected TString json
@@ -430,9 +398,12 @@ string =
 If a structure is decoded as a `value`, everything _in_ the structure will be
 considered as having been used and will not appear in `UnusedValue` warnings.
 
+    import Json.Encode as Encode
+
+
     """ [ 123, "world" ] """
         |> decodeString value
-    --> Success (Encode.list [ Encode.int 123, Encode.string "world" ])
+    --> Success (Encode.list identity [ Encode.int 123, Encode.string "world" ])
 
 -}
 value : Decoder Value
@@ -443,6 +414,11 @@ value =
 
 
 {-| Decode a number into a `Float`.
+
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
 
     """ 12.34 """
         |> decodeString float
@@ -464,14 +440,19 @@ float =
     Decoder <|
         \json ->
             case json of
-                Number _ value ->
-                    ok (markUsed json) value
+                Number _ val ->
+                    ok (markUsed json) val
 
                 _ ->
                     expected TNumber json
 
 
 {-| Decode a number into an `Int`.
+
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
 
     """ 123 """
         |> decodeString int
@@ -491,9 +472,10 @@ int =
     Decoder <|
         \json ->
             case json of
-                Number _ value ->
-                    if toFloat (round value) == value then
-                        ok (markUsed json) (round value)
+                Number _ val ->
+                    if toFloat (round val) == val then
+                        ok (markUsed json) (round val)
+
                     else
                         expected TInt json
 
@@ -513,8 +495,8 @@ bool =
     Decoder <|
         \json ->
             case json of
-                Bool _ value ->
-                    ok (markUsed json) value
+                Bool _ val ->
+                    ok (markUsed json) val
 
                 _ ->
                     expected TBool json
@@ -532,6 +514,11 @@ verify that a field is _missing_, only that it is explicitly set to `null`.
     """ { "foo": null } """
         |> decodeString (field "foo" (null ()))
     --> Success ()
+
+
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
 
 
     """ { } """
@@ -556,6 +543,11 @@ null val =
 
 {-| Decode a list of values, decoding each entry with the provided decoder.
 
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
+
     """ [ "foo", "bar" ] """
         |> decodeString (list string)
     --> Success [ "foo", "bar" ]
@@ -578,8 +570,8 @@ list (Decoder decoderFn) =
             AnnotatedValue
             -> ( Int, Result Errors ( List AnnotatedValue, List (Located Warning), List a ) )
             -> ( Int, Result Errors ( List AnnotatedValue, List (Located Warning), List a ) )
-        accumulate value ( idx, acc ) =
-            case ( acc, decoderFn value ) of
+        accumulate val ( idx, acc ) =
+            case ( acc, decoderFn val ) of
                 ( Err errors, Err newErrors ) ->
                     ( idx - 1
                     , Err <| Nonempty.cons (AtIndex idx newErrors) errors
@@ -593,8 +585,8 @@ list (Decoder decoderFn) =
                     , Err <| Nonempty.fromElement (AtIndex idx errors)
                     )
 
-                ( Ok ( jsonAcc, warnAcc, valAcc ), Ok { json, warnings, value } ) ->
-                    ( idx - 1, Ok ( json :: jsonAcc, warnings ++ warnAcc, value :: valAcc ) )
+                ( Ok ( jsonAcc, warnAcc, valAcc ), Ok res ) ->
+                    ( idx - 1, Ok ( res.json :: jsonAcc, res.warnings ++ warnAcc, res.value :: valAcc ) )
 
         finalize : ( List AnnotatedValue, List (Located Warning), b ) -> Acc b
         finalize ( json, warnings, values ) =
@@ -616,6 +608,8 @@ list (Decoder decoderFn) =
 
 {-| _Convenience function._ Decode a JSON array into an Elm `Array`.
 
+    import Array
+
     """ [ 1, 2, 3 ] """
         |> decodeString (array int)
     --> Success <| Array.fromList [ 1, 2, 3 ]
@@ -627,6 +621,9 @@ array decoder =
 
 
 {-| _Convenience function._ Decode a JSON object into an Elm `Dict String`.
+
+    import Dict
+
 
     """ { "foo": "bar", "bar": "hi there" } """
         |> decodeString (dict string)
@@ -646,6 +643,11 @@ dict decoder =
 Using this decoder marks the object itself as used, without touching any of its
 children. It is, as such, fairly well behaved.
 
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
+
     """ { } """
         |> decodeString isObject
     --> Success ()
@@ -653,7 +655,7 @@ children. It is, as such, fairly well behaved.
 
     """ [] """
         |> decodeString isObject
-    --> Errors <| Nonempty.fromElement <| Here <| Expected TObject (Encode.list [])
+    --> Errors <| Nonempty.fromElement <| Here <| Expected TObject (Encode.list identity [])
 
 -}
 isObject : Decoder ()
@@ -671,6 +673,11 @@ isObject =
 {-| Similar to `isObject`, a decoder to ascertain that a JSON value is a JSON
 array.
 
+    import List.Nonempty as Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
+
     """ [] """
         |> decodeString isArray
     --> Success ()
@@ -679,7 +686,7 @@ array.
     """ [ "foo" ] """
         |> decodeString isArray
     --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (Here <| UnusedValue <|
-            Encode.string "foo") [])) []) ()
+    -->       Encode.string "foo") [])) []) ()
 
 
     """ null """
@@ -701,8 +708,13 @@ isArray =
 
 {-| Decode a specific index using a specified `Decoder`.
 
+    import List.Nonempty exposing (Nonempty(..))
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
+
     """ [ "hello", 123 ] """
-        |> decodeString (map2 (,) (index 0 string) (index 1 int))
+        |> decodeString (map2 Tuple.pair (index 0 string) (index 1 int))
     --> Success ( "hello", 123 )
 
 
@@ -718,9 +730,9 @@ index idx (Decoder decoderFn) =
     let
         finalize :
             AnnotatedValue
-            -> ( b, List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
+            -> ( List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
             -> Result Errors (Acc a)
-        finalize json ( _, values, warnings, res ) =
+        finalize json ( values, warnings, res ) =
             case res of
                 Nothing ->
                     expected (TArrayIndex idx) json
@@ -733,29 +745,33 @@ index idx (Decoder decoderFn) =
 
         accumulate :
             AnnotatedValue
-            -> ( Int, List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
-            -> ( Int, List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
-        accumulate value ( i, acc, warnings, result ) =
+            -> ( Int, ( List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) ) )
+            -> ( Int, ( List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) ) )
+        accumulate val ( i, ( acc, warnings, result ) ) =
             if i == idx then
-                case decoderFn value of
+                case decoderFn val of
                     Err e ->
                         ( i - 1
-                        , value :: acc
-                        , warnings
-                        , Just <| Err <| Nonempty.fromElement <| AtIndex i e
+                        , ( val :: acc
+                          , warnings
+                          , Just <| Err <| Nonempty.fromElement <| AtIndex i e
+                          )
                         )
 
                     Ok res ->
                         ( i - 1
-                        , res.json :: acc
-                        , res.warnings ++ warnings
-                        , Just <| Ok res.value
+                        , ( res.json :: acc
+                          , res.warnings ++ warnings
+                          , Just <| Ok res.value
+                          )
                         )
+
             else
                 ( i - 1
-                , value :: acc
-                , warnings
-                , result
+                , ( val :: acc
+                  , warnings
+                  , result
+                  )
                 )
     in
     Decoder <|
@@ -764,8 +780,9 @@ index idx (Decoder decoderFn) =
                 Array _ values ->
                     List.foldr
                         accumulate
-                        ( List.length values - 1, [], [], Nothing )
+                        ( List.length values - 1, ( [], [], Nothing ) )
                         values
+                        |> Tuple.second
                         |> finalize json
 
                 _ ->
@@ -787,8 +804,8 @@ keyValuePairs (Decoder decoderFn) =
             ( String, AnnotatedValue )
             -> Result Errors ( List ( String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
             -> Result Errors ( List ( String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
-        accumulate ( key, value ) acc =
-            case ( acc, decoderFn value ) of
+        accumulate ( key, val ) acc =
+            case ( acc, decoderFn val ) of
                 ( Err e, Err new ) ->
                     Err <| Nonempty.cons (InField key new) e
 
@@ -806,10 +823,10 @@ keyValuePairs (Decoder decoderFn) =
                         )
 
         finalize : ( List ( String, AnnotatedValue ), List (Located Warning), b ) -> Acc b
-        finalize ( json, warnings, value ) =
+        finalize ( json, warnings, val ) =
             { json = Object True json
             , warnings = warnings
-            , value = value
+            , value = val
             }
     in
     Decoder <|
@@ -824,6 +841,10 @@ keyValuePairs (Decoder decoderFn) =
 
 
 {-| Decode the content of a field using a provided decoder.
+
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
 
     """ { "foo": "bar" } """
         |> decodeString (field "foo" string)
@@ -853,11 +874,11 @@ field fieldName (Decoder decoderFn) =
             ( String, AnnotatedValue )
             -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
             -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
-        accumulate ( key, value ) ( acc, warnings, result ) =
+        accumulate ( key, val ) ( acc, warnings, result ) =
             if key == fieldName then
-                case decoderFn value of
+                case decoderFn val of
                     Err e ->
-                        ( ( key, value ) :: acc
+                        ( ( key, val ) :: acc
                         , warnings
                         , Just <| Err <| Nonempty.fromElement <| InField key e
                         )
@@ -867,8 +888,9 @@ field fieldName (Decoder decoderFn) =
                         , List.map (Nonempty.fromElement >> InField key) res.warnings ++ warnings
                         , Just <| Ok res.value
                         )
+
             else
-                ( ( key, value ) :: acc, warnings, result )
+                ( ( key, val ) :: acc, warnings, result )
 
         finalize :
             AnnotatedValue
@@ -918,13 +940,17 @@ at fields decoder =
 
 If all fail, the errors are collected into a `BadOneOf`.
 
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
     """ [ 12, "whatever" ] """
-        |> decodeString (list <| oneOf [ map toString int, string ])
+        |> decodeString (list <| oneOf [ map String.fromInt int, string ])
     --> Success [ "12", "whatever" ]
 
 
     """ null """
-        |> decodeString (oneOf [ string, map toString int ])
+        |> decodeString (oneOf [ string, map String.fromInt int ])
     --> Errors <| Nonempty.fromElement <| Here <| BadOneOf
     -->   [ Nonempty.fromElement <| Here <| Expected TString Encode.null
     -->   , Nonempty.fromElement <| Here <| Expected TInt Encode.null
@@ -943,7 +969,7 @@ oneOfHelp :
     -> AnnotatedValue
     -> List Errors
     -> Result Errors (Acc a)
-oneOfHelp decoders value errorAcc =
+oneOfHelp decoders val errorAcc =
     case decoders of
         [] ->
             BadOneOf (List.reverse errorAcc)
@@ -952,16 +978,21 @@ oneOfHelp decoders value errorAcc =
                 |> Err
 
         (Decoder decoderFn) :: rest ->
-            case decoderFn value of
+            case decoderFn val of
                 Ok res ->
                     Ok res
 
                 Err e ->
-                    oneOfHelp rest value (e :: errorAcc)
+                    oneOfHelp rest val (e :: errorAcc)
 
 
 {-| Decodes successfully and wraps with a `Just`, handling failure by succeeding
 with `Nothing`.
+
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
 
     """ [ "foo", 12 ] """
         |> decodeString (list <| maybe string)
@@ -1037,17 +1068,15 @@ This can be used to decode union types:
 
 -}
 check : Decoder a -> a -> Decoder b -> Decoder b
-check checkDecoder expected actualDecoder =
+check checkDecoder expectedVal actualDecoder =
     checkDecoder
         |> andThen
             (\actual ->
-                if actual == expected then
+                if actual == expectedVal then
                     actualDecoder
+
                 else
-                    fail <|
-                        "Verification failed, expected '"
-                            ++ toString expected
-                            ++ "'."
+                    fail "Verification failed"
             )
 
 
@@ -1271,43 +1300,42 @@ expected expectedType json =
         |> Err
 
 
-decode : Value -> Result String AnnotatedValue
+decode : Value -> Result Decode.Error AnnotatedValue
 decode =
-    Decode.decodeValue decoder
+    Decode.decodeValue annotatedDecoder
 
 
-decoder : Decode.Decoder AnnotatedValue
-decoder =
+annotatedDecoder : Decode.Decoder AnnotatedValue
+annotatedDecoder =
     Decode.oneOf
         [ Decode.map (String False) Decode.string
         , Decode.map (Number False) Decode.float
         , Decode.map (Bool False) Decode.bool
         , Decode.null (Null False)
-        , Decode.map (Array False) (Decode.list <| Decode.lazy <| \_ -> decoder)
+        , Decode.map (Array False) (Decode.list <| Decode.lazy <| \_ -> annotatedDecoder)
         , Decode.map
-            (List.reverse >> Object False)
-            (Decode.keyValuePairs <| Decode.lazy <| \_ -> decoder)
+            (Object False)
+            (Decode.keyValuePairs <| Decode.lazy <| \_ -> annotatedDecoder)
         ]
 
 
 encode : AnnotatedValue -> Value
 encode v =
     case v of
-        String _ value ->
-            Encode.string value
+        String _ val ->
+            Encode.string val
 
-        Number _ value ->
-            Encode.float value
+        Number _ val ->
+            Encode.float val
 
-        Bool _ value ->
-            Encode.bool value
+        Bool _ val ->
+            Encode.bool val
 
         Null _ ->
             Encode.null
 
         Array _ values ->
-            List.map encode values
-                |> Encode.list
+            Encode.list encode values
 
         Object _ kvPairs ->
             List.map (Tuple.mapSecond encode) kvPairs
@@ -1338,8 +1366,8 @@ gatherWarnings json =
         Array _ values ->
             values
                 |> List.indexedMap
-                    (\idx value ->
-                        case gatherWarnings value of
+                    (\idx val ->
+                        case gatherWarnings val of
                             [] ->
                                 []
 
@@ -1351,8 +1379,8 @@ gatherWarnings json =
         Object _ kvPairs ->
             kvPairs
                 |> List.concatMap
-                    (\( key, value ) ->
-                        case gatherWarnings value of
+                    (\( key, val ) ->
+                        case gatherWarnings val of
                             [] ->
                                 []
 
@@ -1367,14 +1395,14 @@ gatherWarnings json =
 markUsed : AnnotatedValue -> AnnotatedValue
 markUsed annotatedValue =
     case annotatedValue of
-        String _ value ->
-            String True value
+        String _ val ->
+            String True val
 
-        Number _ value ->
-            Number True value
+        Number _ val ->
+            Number True val
 
-        Bool _ value ->
-            Bool True value
+        Bool _ val ->
+            Bool True val
 
         Null _ ->
             Null True
@@ -1391,6 +1419,11 @@ markUsed annotatedValue =
 
 
 {-| Interpret a decode result in a strict way, lifting warnings to errors.
+
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
 
     """ ["foo"] """
         |> decodeString isArray
@@ -1474,17 +1507,17 @@ warningsToString warnings =
 warningToString : Warning -> List String
 warningToString warning =
     let
-        ( message, value ) =
+        ( message, val ) =
             case warning of
-                Warning message value ->
-                    ( message, value )
+                Warning message_ val_ ->
+                    ( message_, val_ )
 
-                UnusedValue value ->
-                    ( "Unused value:", value )
+                UnusedValue val_ ->
+                    ( "Unused value:", val_ )
     in
     message
         :: ""
-        :: (indent <| jsonLines value)
+        :: (indent <| jsonLines val)
 
 
 indent : List String -> List String
@@ -1518,10 +1551,10 @@ errorToString error =
     case error of
         Failure failure json ->
             case json of
-                Just value ->
+                Just val ->
                     failure
                         :: ""
-                        :: (indent <| jsonLines value)
+                        :: (indent <| jsonLines val)
 
                 Nothing ->
                     [ failure ]
@@ -1553,8 +1586,8 @@ intercalateMap sep toList xs =
 
 
 expectedTypeToString : ExpectedType -> String
-expectedTypeToString expected =
-    case expected of
+expectedTypeToString expectedType =
+    case expectedType of
         TString ->
             "a string"
 
@@ -1577,7 +1610,7 @@ expectedTypeToString expected =
             "an object"
 
         TArrayIndex idx ->
-            "an array with index " ++ toString idx
+            "an array with index " ++ String.fromInt idx
 
-        TObjectField field ->
-            "an object with a field '" ++ field ++ "'"
+        TObjectField aField ->
+            "an object with a field '" ++ aField ++ "'"

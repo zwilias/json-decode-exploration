@@ -1,4 +1,4 @@
-module Json.Decode.Exploration.Located exposing (Located(..), map, toString)
+module Json.Decode.Exploration.Located exposing (Located(..), toString, map)
 
 {-| A type that gives one or more pieces of information, tagged with a path
 through a datastructure with fields and indices.
@@ -30,7 +30,7 @@ toString : (a -> List String) -> Nonempty (Located a) -> List String
 toString itemToString locatedItems =
     locatedItems
         |> gather ""
-        |> List.map (uncurry <| render itemToString)
+        |> List.map (\( x, vals ) -> render itemToString x vals)
         |> intercalate ""
 
 
@@ -63,6 +63,7 @@ render itemToString path errors =
     in
     if String.isEmpty path then
         formattedErrors
+
     else
         ("At path " ++ path) :: "" :: formattedErrors
 
@@ -82,7 +83,7 @@ flatten located =
             gather ("/" ++ s) vals
 
         AtIndex i vals ->
-            gather ("/" ++ Basics.toString i) vals
+            gather ("/" ++ String.fromInt i) vals
 
 
 gather : String -> Nonempty (Located a) -> List ( String, List a )

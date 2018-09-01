@@ -1,4 +1,4 @@
-module SimpleTests exposing (..)
+module SimpleTests exposing (Tree(..), andThenPreservesErrors, decodingAFieldDoesNotMarkTheOthersAsUsed, indexPropagatesErrors, keyValuePairsCollectsErrors, listCollectsErrors, map2CombineErrors, map2CombineErrorsCase, map2Test, map3Test, map4Test, map5Test, map6Test, map7Test, map8Test, noUnusedValuesWithValue, noUnusedValuesWithValueHelper, simpleRecursiveTest, simpleUnexpectedType, simpleUnexpectedTypes, treeDecoder, unusedSimpleValues, unusedValueTest, warningsInStrictModeAreErrors)
 
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode
@@ -14,7 +14,6 @@ import Json.Decode.Exploration as Decode
 import Json.Decode.Exploration.Located exposing (Located(..))
 import Json.Encode as Encode
 import List.Nonempty as Nonempty exposing (Nonempty(..))
-import Native.TestHelpers
 import Test exposing (..)
 
 
@@ -25,7 +24,7 @@ unusedSimpleValues =
     , Encode.float 0.1
     , Encode.null
     , Encode.bool True
-    , Encode.list []
+    , Encode.list identity []
     , Encode.object []
     ]
         |> List.map unusedValueTest
@@ -60,7 +59,7 @@ simpleUnexpectedTypes =
     , ( Encode.string "foo", neutralize Decode.bool, TBool )
     , ( Encode.string "foo", neutralize (Decode.list Decode.bool), TArray )
     , ( Encode.string "bar", Decode.index 0 (Decode.succeed ()), TArray )
-    , ( Encode.list [], Decode.index 0 (Decode.succeed ()), TArrayIndex 0 )
+    , ( Encode.list identity [], Decode.index 0 (Decode.succeed ()), TArrayIndex 0 )
     , ( Encode.string "foo", neutralize (Decode.keyValuePairs Decode.bool), TObject )
     , ( Encode.string "bar", Decode.field "foo" (Decode.succeed ()), TObject )
     , ( Encode.object [], Decode.field "foo" (Decode.succeed ()), TObjectField "foo" )
@@ -78,11 +77,42 @@ simpleUnexpectedType value decoder expected =
                 (Here <| Expected expected value)
                 []
     in
-    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ toString expected) <|
+    test ("Given: " ++ Encode.encode 0 value ++ ", expected: " ++ expectedTypeToString expected) <|
         \_ ->
             value
                 |> Decode.decodeValue decoder
                 |> Expect.equal (Errors expectedErrors)
+
+
+expectedTypeToString : ExpectedType -> String
+expectedTypeToString expectedType =
+    case expectedType of
+        TInt ->
+            "int"
+
+        TNumber ->
+            "number"
+
+        TNull ->
+            "null"
+
+        TString ->
+            "string"
+
+        TBool ->
+            "bool"
+
+        TArray ->
+            "array"
+
+        TArrayIndex i ->
+            "array at " ++ String.fromInt i
+
+        TObject ->
+            "object"
+
+        TObjectField f ->
+            "object at " ++ f
 
 
 
@@ -274,7 +304,7 @@ map8Test =
 
 noUnusedValuesWithValue : Test
 noUnusedValuesWithValue =
-    [ Encode.list [ Encode.string "foo" ]
+    [ Encode.list Encode.string [ "foo" ]
     , Encode.object [ ( "foo", Encode.string "foo" ) ]
     ]
         |> List.map noUnusedValuesWithValueHelper
@@ -288,23 +318,6 @@ noUnusedValuesWithValueHelper value =
             value
                 |> Decode.decodeValue (Decode.map (always ()) Decode.value)
                 |> Expect.equal (Success ())
-
-
-
--- Invalid JSON Values
-
-
-functionInValueIsBad : Test
-functionInValueIsBad =
-    test "A function in a JSON value results in BadJson" <|
-        \_ ->
-            Native.TestHelpers.jsonWithFunction
-                |> Decode.decodeValue Decode.value
-                |> Expect.equal BadJson
-
-
-
---
 
 
 listCollectsErrors : Test
@@ -389,12 +402,12 @@ map2CombineErrors =
     , ( """ [ null, 1 ] """, Errors <| Nonempty (badIndex 0) [] )
     , ( """ [ 1, 2] """, Success 3 )
     ]
-        |> List.map (uncurry map2CombineErrorsCase)
+        |> List.map map2CombineErrorsCase
         |> describe "map2 combines errors"
 
 
-map2CombineErrorsCase : String -> DecodeResult Int -> Test
-map2CombineErrorsCase input expected =
+map2CombineErrorsCase : ( String, DecodeResult Int ) -> Test
+map2CombineErrorsCase ( input, expected ) =
     test input <|
         \_ ->
             input

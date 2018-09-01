@@ -1,4 +1,4 @@
-module PipelineTests exposing (..)
+module PipelineTests exposing (optionalAtTest, optionalAtWrongStructure, optionalEmptyStructure, optionalUnusedField, optionalWrongStructure)
 
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode exposing (..)
@@ -59,7 +59,7 @@ optionalWrongStructure =
         \_ ->
             """ [] """
                 |> decodeString (decode identity |> optional "foo" string "hi")
-                |> Expect.equal (Errors (Nonempty (Here <| Expected TObject (Encode.list [])) []))
+                |> Expect.equal (Errors (Nonempty (Here <| Expected TObject (Encode.list identity [])) []))
 
 
 optionalAtWrongStructure : Test
@@ -67,7 +67,7 @@ optionalAtWrongStructure =
     let
         expectedErrors : Errors
         expectedErrors =
-            Expected TObject (Encode.list [])
+            Expected TObject (Encode.list identity [])
                 |> Here
                 |> Nonempty.fromElement
                 |> InField "b"

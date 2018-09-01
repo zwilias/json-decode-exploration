@@ -1,18 +1,8 @@
-module Json.Decode.Exploration.Pipeline
-    exposing
-        ( checked
-        , checkedAt
-        , custom
-        , decode
-        , hardcoded
-        , ignored
-        , ignoredAt
-        , optional
-        , optionalAt
-        , required
-        , requiredAt
-        , resolve
-        )
+module Json.Decode.Exploration.Pipeline exposing
+    ( required, requiredAt, optional, optionalAt, hardcoded, custom
+    , checked, checkedAt, ignored, ignoredAt
+    , decode, resolve
+    )
 
 {-|
 
@@ -59,6 +49,8 @@ import Json.Decode.Exploration as Decode exposing (Decoder)
 
 {-| Decode a required field.
 
+    import Json.Decode.Exploration exposing (..)
+
     type alias User =
         { id : Int
         , name : String
@@ -83,6 +75,8 @@ required key valDecoder decoder =
 
 
 {-| Decode a required nested field.
+
+    import Json.Decode.Exploration exposing (..)
 
     type alias User =
         { id : Int
@@ -118,6 +112,8 @@ missing, then it decodes as the `fallback` value. If the field is present,
 then `valDecoder` is used to decode its value. If `valDecoder` fails on a
 `null` value, then the `fallback` is used as if the field were missing
 entirely.
+
+    import Json.Decode.Exploration exposing (..)
 
     type alias User =
         { id : Int
@@ -164,16 +160,16 @@ the fallback.
 -}
 optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optional key valDecoder fallback decoder =
-    optionalField key valDecoder fallback
-        |> flip Decode.andMap decoder
+    Decode.andMap (optionalField key valDecoder fallback) decoder
 
 
 {-| Decode an optional nested field.
 -}
 optionalAt : List String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
 optionalAt path valDecoder fallback decoder =
-    List.foldr (\f d -> optionalField f d fallback) valDecoder path
-        |> flip Decode.andMap decoder
+    Decode.andMap
+        (List.foldr (\f d -> optionalField f d fallback) valDecoder path)
+        decoder
 
 
 optionalField : String -> Decoder a -> a -> Decoder a
@@ -192,6 +188,9 @@ optionalField field decoder fallback =
 
 {-| Rather than decoding anything, use a fixed value for the next step in the
 pipeline. `harcoded` does not look at the JSON at all.
+
+    import Json.Decode.Exploration exposing (..)
+
 
     type alias User =
         { id : Int
@@ -218,6 +217,12 @@ hardcoded =
 
 {-| `check` a field in the JSON to ensure it has a certain value before allowing
 the decoder to succeed.
+
+    import List.Nonempty as Nonempty
+    import Json.Decode.Exploration exposing (..)
+    import Json.Decode.Exploration.Located exposing (Located(..))
+    import Json.Encode as Encode
+
 
     type alias User =
         { id : Int
@@ -257,7 +262,7 @@ the decoder to succeed.
 
     expectedErrors : Errors
     expectedErrors =
-        Failure "Verification failed, expected 'True'."  (Just <| Encode.bool False)
+        Failure "Verification failed"  (Just <| Encode.bool False)
             |> Here
             |> Nonempty.fromElement
             |> InField "enabled"
@@ -282,6 +287,9 @@ checkedAt path decoder expectedValue next =
 
 {-| Ignore a field from decoding. By using `ignored`, you acknowledge that it is
 in the JSON so warnings don't show up.
+
+    import Json.Decode.Exploration exposing (..)
+
 
     type alias User =
         { id : Int
@@ -326,6 +334,9 @@ ignoredAt path decoder =
 
 Consider this example.
 
+    import Json.Decode.Exploration exposing (..)
+
+
     type alias User =
         { id : Int
         , name : String
@@ -357,6 +368,8 @@ custom =
 
 {-| Convert a `Decoder (Result x a)` into a `Decoder a`. Useful when you want
 to perform some custom processing just before completing the decoding operation.
+
+    import Json.Decode.Exploration exposing (..)
 
     type alias User =
         { id : Int
