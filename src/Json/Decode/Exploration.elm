@@ -172,9 +172,9 @@ type Warning
   - `BadJson` occurs when the JSON string isn't valid JSON, or the `Value`
     contains non-JSON primitives like functions.
   - `Errors` means errors occurred while running your decoder and contains the
-    [`Errors`](#errors) that occurred.
+    [`Errors`](#Errors) that occurred.
   - `WithWarnings` means decoding succeeded but produced one or more
-    [`Warnings`](#warnings).
+    [`Warnings`](#Warnings).
   - `Success` is the best possible outcome: All went well!
 
 -}
