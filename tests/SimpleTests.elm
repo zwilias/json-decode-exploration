@@ -1,4 +1,4 @@
-module SimpleTests exposing (Tree(..), andThenPreservesErrors, decodingAFieldDoesNotMarkTheOthersAsUsed, indexPropagatesErrors, keyValuePairsCollectsErrors, listCollectsErrors, map2CombineErrors, map2CombineErrorsCase, map2Test, map3Test, map4Test, map5Test, map6Test, map7Test, map8Test, noUnusedValuesWithValue, noUnusedValuesWithValueHelper, simpleRecursiveTest, simpleUnexpectedType, simpleUnexpectedTypes, treeDecoder, unusedSimpleValues, unusedValueTest, warningsInStrictModeAreErrors)
+module SimpleTests exposing (Tree(..), andThenPreservesErrors, decodingAFieldDoesNotMarkTheOthersAsUsed, expectedTypeToString, indexPropagatesErrors, keyValuePairsCollectsErrors, listCollectsErrors, map2CombineErrors, map2CombineErrorsCase, map2Test, map3Test, map4Test, map5Test, map6Test, map7Test, map8Test, noUnusedValuesWithValue, noUnusedValuesWithValueHelper, simpleRecursiveTest, simpleUnexpectedType, simpleUnexpectedTypes, strip, toResult, treeDecoder, unusedSimpleValues, unusedValueTest, validateStrip, warningsInStrictModeAreErrors)
 
 import Expect exposing (Expectation)
 import Json.Decode.Exploration as Decode
@@ -445,11 +445,7 @@ decodingAFieldDoesNotMarkTheOthersAsUsed =
     let
         expectedWarnings : Warnings
         expectedWarnings =
-            UnusedValue Encode.null
-                |> Here
-                |> Nonempty.fromElement
-                |> InField "baz"
-                |> Nonempty.fromElement
+            Nonempty.fromElement (Here (UnusedField "baz"))
     in
     test "Decoding a single field generates unused warnings for the other fields" <|
         \_ ->
@@ -480,3 +476,55 @@ warningsInStrictModeAreErrors =
                 |> Decode.strict
                 |> Result.mapError Decode.errorsToString
                 |> Expect.equal (Err expectedMessage)
+
+
+
+-- strip tests
+
+
+strip : Test
+strip =
+    describe "strip preserves decoder validity"
+        [ validateStrip "sanity" Decode.string """ "hello world" """
+        , validateStrip "used field, unused value"
+            (Decode.field "foo" (Decode.succeed ()))
+            """{"foo": "hi there"}"""
+        , validateStrip "unused value, but structure matters"
+            (Decode.field "foo"
+                (Decode.oneOf
+                    [ Decode.null "bar"
+                    , Decode.succeed "foo"
+                    ]
+                )
+            )
+            """{"foo": "hi there"}"""
+        ]
+
+
+validateStrip : String -> Decoder a -> String -> Test
+validateStrip name decoder value =
+    test name <|
+        \_ ->
+            let
+                result =
+                    toResult (Decode.decodeString decoder value)
+            in
+            Decode.stripString decoder value
+                |> Result.andThen (Decode.decodeString decoder >> toResult)
+                |> Expect.equal result
+
+
+toResult : Decode.DecodeResult a -> Result Errors a
+toResult res =
+    case res of
+        Success v ->
+            Ok v
+
+        WithWarnings _ v ->
+            Ok v
+
+        Errors e ->
+            Err e
+
+        BadJson ->
+            Err (Nonempty.fromElement (Here (Failure "Bad json" Nothing)))

@@ -9,6 +9,7 @@ module Json.Decode.Exploration exposing
     , maybe, oneOf
     , lazy, value, null, check, succeed, fail, warn, andThen
     , map, map2, map3, map4, map5, map6, map7, map8, andMap
+    , stripString, stripValue
     )
 
 {-| This package presents a somewhat experimental approach to JSON decoding. Its
@@ -99,6 +100,11 @@ which makes it easier to handle large objects.
 
 @docs map, map2, map3, map4, map5, map6, map7, map8, andMap
 
+
+# Stripping
+
+@docs stripString, stripValue
+
 -}
 
 import Array exposing (Array)
@@ -164,6 +170,8 @@ describe the path to the warnings.
 -}
 type Warning
     = UnusedValue Value
+    | UnusedField String
+    | UnusedIndex Int
     | Warning String Value
 
 
@@ -255,6 +263,26 @@ decodeString decoder jsonString =
 
         Ok json ->
             decodeValue decoder json
+
+
+{-| Reduce JSON down to what is needed to ensure decoding succeeds.
+-}
+stripValue : Decoder a -> Value -> Result Errors Value
+stripValue decoder val =
+    Ok val
+
+
+{-| Reduce JSON down to what is needed to ensure decoding succeeds.
+-}
+stripString : Decoder a -> String -> Result Errors String
+stripString decoder jsonString =
+    case Decode.decodeString Decode.value jsonString of
+        Err _ ->
+            Debug.todo "Hm, this is annoying. BadJson isn't Errors..."
+
+        Ok v ->
+            stripValue decoder v
+                |> Result.map (Encode.encode 0)
 
 
 {-| A decoder that will ignore the actual JSON and succeed with the provided
@@ -567,10 +595,10 @@ list : Decoder a -> Decoder (List a)
 list (Decoder decoderFn) =
     let
         accumulate :
-            AnnotatedValue
-            -> ( Int, Result Errors ( List AnnotatedValue, List (Located Warning), List a ) )
-            -> ( Int, Result Errors ( List AnnotatedValue, List (Located Warning), List a ) )
-        accumulate val ( idx, acc ) =
+            ( Bool, AnnotatedValue )
+            -> ( Int, Result Errors ( List ( Bool, AnnotatedValue ), List (Located Warning), List a ) )
+            -> ( Int, Result Errors ( List ( Bool, AnnotatedValue ), List (Located Warning), List a ) )
+        accumulate ( used, val ) ( idx, acc ) =
             case ( acc, decoderFn val ) of
                 ( Err errors, Err newErrors ) ->
                     ( idx - 1
@@ -586,9 +614,9 @@ list (Decoder decoderFn) =
                     )
 
                 ( Ok ( jsonAcc, warnAcc, valAcc ), Ok res ) ->
-                    ( idx - 1, Ok ( res.json :: jsonAcc, res.warnings ++ warnAcc, res.value :: valAcc ) )
+                    ( idx - 1, Ok ( ( True, res.json ) :: jsonAcc, res.warnings ++ warnAcc, res.value :: valAcc ) )
 
-        finalize : ( List AnnotatedValue, List (Located Warning), b ) -> Acc b
+        finalize : ( List ( Bool, AnnotatedValue ), List (Located Warning), b ) -> Acc b
         finalize ( json, warnings, values ) =
             { json = Array True json, warnings = warnings, value = values }
     in
@@ -685,8 +713,7 @@ array.
 
     """ [ "foo" ] """
         |> decodeString isArray
-    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (Here <| UnusedValue <|
-    -->       Encode.string "foo") [])) []) ()
+    --> WithWarnings (Nonempty (Here (UnusedIndex 0)) []) ()
 
 
     """ null """
@@ -720,8 +747,7 @@ isArray =
 
     """ [ "hello", "there" ] """
         |> decodeString (index 1 string)
-    --> WithWarnings
-    -->   (Nonempty (AtIndex 0 <| Nonempty (Here <| UnusedValue (Encode.string "hello")) []) [])
+    --> WithWarnings (Nonempty (Here (UnusedIndex 0)) [])
     -->   "there"
 
 -}
@@ -730,7 +756,7 @@ index idx (Decoder decoderFn) =
     let
         finalize :
             AnnotatedValue
-            -> ( List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) )
+            -> ( List ( Bool, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
             -> Result Errors (Acc a)
         finalize json ( values, warnings, res ) =
             case res of
@@ -744,15 +770,15 @@ index idx (Decoder decoderFn) =
                     Ok { json = Array True values, warnings = warnings, value = v }
 
         accumulate :
-            AnnotatedValue
-            -> ( Int, ( List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) ) )
-            -> ( Int, ( List AnnotatedValue, List (Located Warning), Maybe (Result Errors a) ) )
-        accumulate val ( i, ( acc, warnings, result ) ) =
+            ( Bool, AnnotatedValue )
+            -> ( Int, ( List ( Bool, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) ) )
+            -> ( Int, ( List ( Bool, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) ) )
+        accumulate ( used, val ) ( i, ( acc, warnings, result ) ) =
             if i == idx then
                 case decoderFn val of
                     Err e ->
                         ( i - 1
-                        , ( val :: acc
+                        , ( ( True, val ) :: acc
                           , warnings
                           , Just <| Err <| Nonempty.fromElement <| AtIndex i e
                           )
@@ -760,7 +786,7 @@ index idx (Decoder decoderFn) =
 
                     Ok res ->
                         ( i - 1
-                        , ( res.json :: acc
+                        , ( ( True, res.json ) :: acc
                           , res.warnings ++ warnings
                           , Just <| Ok res.value
                           )
@@ -768,7 +794,7 @@ index idx (Decoder decoderFn) =
 
             else
                 ( i - 1
-                , ( val :: acc
+                , ( ( used, val ) :: acc
                   , warnings
                   , result
                   )
@@ -801,10 +827,10 @@ keyValuePairs : Decoder a -> Decoder (List ( String, a ))
 keyValuePairs (Decoder decoderFn) =
     let
         accumulate :
-            ( String, AnnotatedValue )
-            -> Result Errors ( List ( String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
-            -> Result Errors ( List ( String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
-        accumulate ( key, val ) acc =
+            ( Bool, String, AnnotatedValue )
+            -> Result Errors ( List ( Bool, String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
+            -> Result Errors ( List ( Bool, String, AnnotatedValue ), List (Located Warning), List ( String, a ) )
+        accumulate ( _, key, val ) acc =
             case ( acc, decoderFn val ) of
                 ( Err e, Err new ) ->
                     Err <| Nonempty.cons (InField key new) e
@@ -817,12 +843,12 @@ keyValuePairs (Decoder decoderFn) =
 
                 ( Ok ( jsonAcc, warningsAcc, accAcc ), Ok res ) ->
                     Ok
-                        ( ( key, res.json ) :: jsonAcc
+                        ( ( True, key, res.json ) :: jsonAcc
                         , List.map (Nonempty.fromElement >> InField key) res.warnings ++ warningsAcc
                         , ( key, res.value ) :: accAcc
                         )
 
-        finalize : ( List ( String, AnnotatedValue ), List (Located Warning), b ) -> Acc b
+        finalize : ( List ( Bool, String, AnnotatedValue ), List (Located Warning), b ) -> Acc b
         finalize ( json, warnings, val ) =
             { json = Object True json
             , warnings = warnings
@@ -858,10 +884,8 @@ keyValuePairs (Decoder decoderFn) =
 
     expectedWarnings : Warnings
     expectedWarnings =
-        UnusedValue (Encode.string "world")
+        UnusedField "hello"
             |> Here
-            |> Nonempty.fromElement
-            |> InField "hello"
             |> Nonempty.fromElement
             |> AtIndex 1
             |> Nonempty.fromElement
@@ -871,30 +895,30 @@ field : String -> Decoder a -> Decoder a
 field fieldName (Decoder decoderFn) =
     let
         accumulate :
-            ( String, AnnotatedValue )
-            -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
-            -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
-        accumulate ( key, val ) ( acc, warnings, result ) =
+            ( Bool, String, AnnotatedValue )
+            -> ( List ( Bool, String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
+            -> ( List ( Bool, String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
+        accumulate ( used, key, val ) ( acc, warnings, result ) =
             if key == fieldName then
                 case decoderFn val of
                     Err e ->
-                        ( ( key, val ) :: acc
+                        ( ( True, key, val ) :: acc
                         , warnings
                         , Just <| Err <| Nonempty.fromElement <| InField key e
                         )
 
                     Ok res ->
-                        ( ( key, res.json ) :: acc
+                        ( ( True, key, res.json ) :: acc
                         , List.map (Nonempty.fromElement >> InField key) res.warnings ++ warnings
                         , Just <| Ok res.value
                         )
 
             else
-                ( ( key, val ) :: acc, warnings, result )
+                ( ( used, key, val ) :: acc, warnings, result )
 
         finalize :
             AnnotatedValue
-            -> ( List ( String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
+            -> ( List ( Bool, String, AnnotatedValue ), List (Located Warning), Maybe (Result Errors a) )
             -> Result Errors (Acc a)
         finalize json ( values, warnings, res ) =
             case res of
@@ -1287,8 +1311,8 @@ type AnnotatedValue
     | Number Bool Float
     | Bool Bool Bool
     | Null Bool
-    | Array Bool (List AnnotatedValue)
-    | Object Bool (List ( String, AnnotatedValue ))
+    | Array Bool (List ( Bool, AnnotatedValue ))
+    | Object Bool (List ( Bool, String, AnnotatedValue ))
 
 
 expected : ExpectedType -> AnnotatedValue -> Result Errors a
@@ -1312,10 +1336,17 @@ annotatedDecoder =
         , Decode.map (Number False) Decode.float
         , Decode.map (Bool False) Decode.bool
         , Decode.null (Null False)
-        , Decode.map (Array False) (Decode.list <| Decode.lazy <| \_ -> annotatedDecoder)
+        , Decode.map (Array False)
+            (Decode.list <|
+                Decode.map (Tuple.pair False)
+                    (Decode.lazy <| \_ -> annotatedDecoder)
+            )
         , Decode.map
             (Object False)
-            (Decode.keyValuePairs <| Decode.lazy <| \_ -> annotatedDecoder)
+            (Decode.map
+                (List.map (\( k, v ) -> ( False, k, v )))
+                (Decode.keyValuePairs <| Decode.lazy <| \_ -> annotatedDecoder)
+            )
         ]
 
 
@@ -1335,10 +1366,10 @@ encode v =
             Encode.null
 
         Array _ values ->
-            Encode.list encode values
+            Encode.list (Tuple.second >> encode) values
 
         Object _ kvPairs ->
-            List.map (Tuple.mapSecond encode) kvPairs
+            List.map (\( _, k, v_ ) -> ( k, encode v_ )) kvPairs
                 |> Encode.object
 
 
@@ -1366,26 +1397,34 @@ gatherWarnings json =
         Array _ values ->
             values
                 |> List.indexedMap
-                    (\idx val ->
-                        case gatherWarnings val of
-                            [] ->
-                                []
+                    (\idx ( used, val ) ->
+                        if used then
+                            case gatherWarnings val of
+                                [] ->
+                                    []
 
-                            x :: xs ->
-                                [ AtIndex idx <| Nonempty x xs ]
+                                x :: xs ->
+                                    [ AtIndex idx <| Nonempty x xs ]
+
+                        else
+                            [ Here (UnusedIndex idx) ]
                     )
                 |> List.concat
 
         Object _ kvPairs ->
             kvPairs
                 |> List.concatMap
-                    (\( key, val ) ->
-                        case gatherWarnings val of
-                            [] ->
-                                []
+                    (\( used, key, val ) ->
+                        if used then
+                            case gatherWarnings val of
+                                [] ->
+                                    []
 
-                            x :: xs ->
-                                [ InField key <| Nonempty x xs ]
+                                x :: xs ->
+                                    [ InField key <| Nonempty x xs ]
+
+                        else
+                            [ Here (UnusedField key) ]
                     )
 
         _ ->
@@ -1408,10 +1447,10 @@ markUsed annotatedValue =
             Null True
 
         Array _ values ->
-            Array True (List.map markUsed values)
+            Array True (List.map (\( _, v ) -> ( True, markUsed v )) values)
 
         Object _ values ->
-            Object True (List.map (Tuple.mapSecond markUsed) values)
+            Object True (List.map (\( _, f, v ) -> ( True, f, markUsed v )) values)
 
 
 
@@ -1428,8 +1467,7 @@ markUsed annotatedValue =
     """ ["foo"] """
         |> decodeString isArray
         |> strict
-    --> (Here <| Failure "Unused value" (Just <| Encode.string "foo"))
-    -->   |> (AtIndex 0 << Nonempty.fromElement)
+    --> (Here <| Failure "Unused index: 0" Nothing)
     -->   |> (Err << Nonempty.fromElement)
 
 
@@ -1441,8 +1479,7 @@ markUsed annotatedValue =
     """ { "foo": "bar" } """
         |> decodeString isObject
         |> strict
-    --> (Here <| Failure "Unused value" (Just <| Encode.string "bar"))
-    -->   |> (InField "foo" << Nonempty.fromElement)
+    --> (Here <| Failure "Unused field: foo" Nothing)
     -->   |> (Err << Nonempty.fromElement)
 
 Bad JSON will also result in a `Failure`, with `Nothing` as the actual value:
@@ -1489,6 +1526,12 @@ warningToError warning =
         UnusedValue v ->
             Failure "Unused value" (Just v)
 
+        UnusedField name ->
+            Failure ("Unused field: " ++ name) Nothing
+
+        UnusedIndex idx ->
+            Failure ("Unused index: " ++ String.fromInt idx) Nothing
+
         Warning w v ->
             Failure w (Just v)
 
@@ -1510,14 +1553,23 @@ warningToString warning =
         ( message, val ) =
             case warning of
                 Warning message_ val_ ->
-                    ( message_, val_ )
+                    ( message_, Just val_ )
 
                 UnusedValue val_ ->
-                    ( "Unused value:", val_ )
+                    ( "Unused value:", Just val_ )
+
+                UnusedField name ->
+                    ( "Unused field: " ++ name, Nothing )
+
+                UnusedIndex idx ->
+                    ( "Unused index: " ++ String.fromInt idx, Nothing )
     in
-    message
-        :: ""
-        :: (indent <| jsonLines val)
+    case val of
+        Nothing ->
+            [ message ]
+
+        Just v ->
+            message :: "" :: indent (jsonLines v)
 
 
 indent : List String -> List String

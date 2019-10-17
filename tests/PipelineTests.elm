@@ -40,11 +40,7 @@ optionalUnusedField =
     let
         expectedWarnings : Warnings
         expectedWarnings =
-            UnusedValue (Encode.int 1)
-                |> Here
-                |> Nonempty.fromElement
-                |> InField "a"
-                |> Nonempty.fromElement
+            Nonempty.fromElement (Here (UnusedField "a"))
     in
     test "decoding an optional field in an object with one other field should warn about other field" <|
         \_ ->

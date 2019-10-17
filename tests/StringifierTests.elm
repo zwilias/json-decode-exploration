@@ -43,17 +43,9 @@ multipleWarnings =
     let
         expectedWarning =
             formatWarning """
-At path /foo
+  Unused field: foo
 
-  Unused value:
-
-    "bar"
-
-At path /baz
-
-  Unused value:
-
-    "klux"
+  Unused field: baz
 """
     in
     test "multiple warnings" <|
@@ -69,17 +61,13 @@ nestedWarnings =
     let
         expectedWarning =
             formatWarning """
-At path /root/0
+At path /root
 
-  Unused value:
+  Unused index: 0
 
-    "foo"
+At path /root
 
-At path /root/1
-
-  Unused value:
-
-    "bar"
+  Unused index: 1
 """
     in
     test "nested warnings" <|
