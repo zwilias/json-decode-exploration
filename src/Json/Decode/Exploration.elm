@@ -271,7 +271,7 @@ stripValue : Decoder a -> Value -> Result Errors Value
 stripValue (Decoder decoderFn) val =
     case decode val of
         Err _ ->
-            Debug.todo "Bad json..."
+            Err (Nonempty (Here (Failure "Bad json" Nothing)) [])
 
         Ok json ->
             Result.map (.json >> stripAnnotatedValue) (decoderFn json)
@@ -283,7 +283,7 @@ stripString : Decoder a -> String -> Result Errors String
 stripString decoder jsonString =
     case Decode.decodeString Decode.value jsonString of
         Err _ ->
-            Debug.todo "Hm, this is annoying. BadJson isn't Errors..."
+            Err (Nonempty (Here (Failure "Bad json" Nothing)) [])
 
         Ok v ->
             stripValue decoder v
