@@ -498,6 +498,9 @@ strip =
                 )
             )
             """{"foo": "hi there"}"""
+        , validateStrip "Read index 1, so index 0 must exist"
+            (Decode.index 1 Decode.string)
+            """["foo", "bar"]"""
         ]
 
 

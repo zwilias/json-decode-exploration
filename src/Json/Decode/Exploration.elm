@@ -268,8 +268,13 @@ decodeString decoder jsonString =
 {-| Reduce JSON down to what is needed to ensure decoding succeeds.
 -}
 stripValue : Decoder a -> Value -> Result Errors Value
-stripValue decoder val =
-    Ok val
+stripValue (Decoder decoderFn) val =
+    case decode val of
+        Err _ ->
+            Debug.todo "Bad json..."
+
+        Ok json ->
+            Result.map (.json >> stripAnnotatedValue) (decoderFn json)
 
 
 {-| Reduce JSON down to what is needed to ensure decoding succeeds.
@@ -747,7 +752,7 @@ isArray =
 
     """ [ "hello", "there" ] """
         |> decodeString (index 1 string)
-    --> WithWarnings (Nonempty (Here (UnusedIndex 0)) [])
+    --> WithWarnings (Nonempty (AtIndex 0 (Nonempty (Here (UnusedValue (Encode.string "hello"))) [])) [])
     -->   "there"
 
 -}
@@ -794,7 +799,7 @@ index idx (Decoder decoderFn) =
 
             else
                 ( i - 1
-                , ( ( used, val ) :: acc
+                , ( ( used || result /= Nothing, val ) :: acc
                   , warnings
                   , result
                   )
@@ -1666,3 +1671,65 @@ expectedTypeToString expectedType =
 
         TObjectField aField ->
             "an object with a field '" ++ aField ++ "'"
+
+
+stripAnnotatedValue : AnnotatedValue -> Value
+stripAnnotatedValue annVal =
+    case annVal of
+        String True v ->
+            Encode.string v
+
+        String False _ ->
+            Encode.string ""
+
+        Number True v ->
+            Encode.float v
+
+        Number False _ ->
+            Encode.float 0
+
+        Bool _ v ->
+            Encode.bool v
+
+        Null _ ->
+            Encode.null
+
+        Array True entries ->
+            minifyArray entries
+
+        Array False _ ->
+            Encode.list identity []
+
+        Object True entries ->
+            minifyObject entries
+
+        Object False _ ->
+            Encode.object []
+
+
+minifyArray : List ( Bool, AnnotatedValue ) -> Value
+minifyArray entries =
+    entries
+        |> List.filterMap
+            (\( used, entry ) ->
+                if used then
+                    Just (stripAnnotatedValue entry)
+
+                else
+                    Nothing
+            )
+        |> Encode.list identity
+
+
+minifyObject : List ( Bool, String, AnnotatedValue ) -> Value
+minifyObject entries =
+    entries
+        |> List.filterMap
+            (\( used, f, entry ) ->
+                if used then
+                    Just ( f, stripAnnotatedValue entry )
+
+                else
+                    Nothing
+            )
+        |> Encode.object
