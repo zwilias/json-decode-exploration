@@ -501,6 +501,14 @@ strip =
         , validateStrip "Read index 1, so index 0 must exist"
             (Decode.index 1 Decode.string)
             """["foo", "bar"]"""
+        , validateStrip "Count array length but don't use values."
+            (Decode.list Decode.value
+                |> Decode.andThen
+                    (\list ->
+                        Decode.succeed (List.length list)
+                    )
+            )
+            """["foo", "bar"]"""
         , validateStrip "Usage from failing decoders is threaded through"
             (Decode.oneOf
                 [ Decode.list (Decode.succeed ())
