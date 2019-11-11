@@ -265,6 +265,9 @@ decodeString decoder jsonString =
 
 
 {-| Reduce JSON down to what is needed to ensure decoding succeeds.
+
+Similar the [`stripString`](#stripString) docs for more details and an example.
+
 -}
 stripValue : Decoder a -> Value -> Result Errors Value
 stripValue (Decoder decoderFn) val =
@@ -292,6 +295,9 @@ stripValue (Decoder decoderFn) val =
     your Decoder doesn't depend on any parameters which
     will vary between at build-time and run-time or
     you will lose this guarantee.
+
+    You can also take a look at the `validateStrip` test
+    cases in [this test module](https://github.com/zwilias/json-decode-exploration/blob/master/tests/SimpleTests.elm).
 
     import Json.Decode.Exploration as Decode exposing (Decoder)
 
