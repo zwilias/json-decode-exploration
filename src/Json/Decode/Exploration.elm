@@ -266,7 +266,7 @@ decodeString decoder jsonString =
 
 {-| Reduce JSON down to what is needed to ensure decoding succeeds.
 
-Similar the [`stripString`](#stripString) docs for more details and an example.
+See the [`stripString`](#stripString) docs for more details and an example.
 
 -}
 stripValue : Decoder a -> Value -> Result Errors Value
@@ -286,18 +286,15 @@ stripValue (Decoder decoderFn) val =
 
 {-| Reduce JSON down to what is needed to ensure decoding succeeds.
 
-    This is useful if you are doing a build step where you want to
-    strip down your JSON data to the minimal amount needed by
-    your Decoder. Because of the purity of Elm's functions,
-    you can safely strip out unused data assuming that you
-    use the exact same Decoder to strip the JSON as you use
-    when you re-run it against the stripped JSON. Be sure
-    your Decoder doesn't depend on any parameters which
-    will vary between at build-time and run-time or
-    you will lose this guarantee.
+This is useful if you are doing a build step where you want to strip down your
+JSON data to the minimal amount needed by your Decoder. Because of the purity of
+Elm's functions, you can safely strip out unused data assuming that you use the
+exact same Decoder to strip the JSON as you use when you re-run it against the
+stripped JSON. Be sure your Decoder doesn't depend on any parameters which will
+vary between at build-time and run-time or you will lose this guarantee.
 
-    You can also take a look at the `validateStrip` test
-    cases in [this test module](https://github.com/zwilias/json-decode-exploration/blob/master/tests/SimpleTests.elm).
+You can also take a look at the `validateStrip` test cases in [this test
+module](https://github.com/zwilias/json-decode-exploration/blob/master/tests/SimpleTests.elm).
 
     import Json.Decode.Exploration as Decode exposing (Decoder)
 
@@ -306,13 +303,13 @@ stripValue (Decoder decoderFn) val =
     jsonValue =
         """
         {
-        "topLevelUsed": 123,
-        "partiallyUsed": [
+          "topLevelUsed": 123,
+          "partiallyUsed": [
             {"used": "Hi! This is read by Decode.index so this Object will be included.", "unused": "Please ignore me"},
             {"used": "This whole Object is stripped out because it isn't read by Decode.index!", "unused": "This field is always ignored"}
             ],
-         "unused": 456,
-         "nestedUnused": "This gets stripped out of the final JSON"
+          "unused": 456,
+          "nestedUnused": "This gets stripped out of the final JSON"
         }
         """
 
@@ -322,11 +319,12 @@ stripValue (Decoder decoderFn) val =
     decoder =
         Decode.map2 Record
             (Decode.field "topLevelUsed" Decode.int)
-            (Decode.field "partiallyUsed" ( Decode.index 0 (Decode.field "used" Decode.string )))
+            (Decode.field "partiallyUsed"
+                 (Decode.index 0 (Decode.field "used" Decode.string))
+            )
 
 
     Decode.stripString decoder jsonValue
-      |> Result.mapError Decode.errorsToString
     --> Ok """{"topLevelUsed":123,"partiallyUsed":[{"used":"Hi! This is read by Decode.index so this Object will be included."}]}"""
 
 -}
