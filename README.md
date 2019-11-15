@@ -24,6 +24,52 @@ everything still works, `npm test` will check both.
 
 ## Changelog
 
+### 6.0.0
+
+Propagation through errors, stripping, and unused fields/indexes versus unused values.
+
+In previous releases, this library did not differentiate between "the decoder
+does not require a field to exist" and "the decoder did not inspect the value of
+this field", and likewise for indexes in JSON arrays.
+
+In order to make that differentation possible, the `Warning` type was expanded
+with `UnusedField String` and `UnusedIndex Int` constructors.
+
+This release also brings propagation of usage-tracking through errors. Consider
+a decoder for a custom type like `type Foo = Foo | Bar | Baz` like so:
+
+```elm
+foo : Decoder Foo
+foo =
+    Decode.andThen
+        (\fooString ->
+            case fooString of
+                "foo" -> Decode.succeed Foo
+                "bar" -> Decode.succeed Bar
+                _ -> Decode.fail "invalid"
+        )
+        Decode.string
+```
+
+Now imagine using that decoder to decode a field, and defaulting the value to
+`Foo` if we failed to decode the value: `Decode.field "hi" (Decode.oneOf [ foo,
+Decode.succeed Baz ])`.
+
+If the input were `{"hi": "there"}`, the library would previously have issued an
+`UnusedValue` warning for the `"hi"` string. However, we did, in fact, inspect
+its value in order to arrive at our final result. This release will _not_ issue
+a warning when this decoder results in `Baz`.
+
+Finally, the most exciting feature in this release, with thanks for
+@dillonkearns for coming up with the motivating use-case and helping think
+things through: stripping JSON values! The new `stripString` and `stripValue`
+functions allow "minimalizing" input to only contain that information which is
+required to have the decoder produce the same value without any warning after
+stripping.
+
+As an example use-case, this can be used during development to show what a JSON
+should minimally be stripped down to when decoding succeeds with warnings.
+
 ### 5.0.1
 
 Elm 0.19.0 compatibility 🎉
@@ -51,7 +97,7 @@ Elm 0.19.0 compatibility 🎉
 
      Together with `strict`, this can be used to create a `Decoder a -> String
      -> Result String a` function for compatibility with the core API.
-   - `warn : String -> Decoder a -> Decoder a`: attach a warning to a decoder. 
+   - `warn : String -> Decoder a -> Decoder a`: attach a warning to a decoder.
    - `ExpectedType`: type to represent the expected type for errors.
 
 #### Changed
@@ -88,7 +134,7 @@ Elm 0.19.0 compatibility 🎉
 - as a side effect, both of the above now correctly mark empty objects as having
   been used, rather than giving a warning when using `optional` on an empty
   object.
-  
+
 ### 4.2.0
 
 #### Added
