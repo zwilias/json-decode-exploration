@@ -3,7 +3,7 @@
     "name": "zwilias/json-decode-exploration",
     "summary": "JSON decoding with warnings and usage tracking",
     "license": "BSD-3-Clause",
-    "version": "5.0.1",
+    "version": "6.0.0",
     "exposed-modules": [
         "Json.Decode.Exploration",
         "Json.Decode.Exploration.Located",
